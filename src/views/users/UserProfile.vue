@@ -120,7 +120,7 @@ const saveProfile = async () => {
 const getImageUrl = (path: string | null) => {
     if (!path) return '';
     if (path.startsWith('http') || path.startsWith('data:')) return path;
-    return `http://localhost:8000${path}`;
+    return `${import.meta.env.VITE_API_URL || 'https://api.inventory.cremin-cam.org'}${path}`;
 };
 
 onMounted(() => {

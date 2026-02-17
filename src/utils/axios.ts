@@ -2,7 +2,7 @@ import axios from 'axios';
 
 // Créer une instance d'axios
 const axiosInstance = axios.create({
-    baseURL: 'http://localhost:8000/api' // Votre URL d'API
+    baseURL: 'https://api.inventory.cremin-cam.org/api' // Votre URL d'API
 });
 
 // Intercepteur pour ajouter le token JWT à chaque requête

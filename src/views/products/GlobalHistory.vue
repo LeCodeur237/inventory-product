@@ -167,7 +167,7 @@ const fetchProfils = async () => {
 const getImageUrl = (path: string | null) => {
     if (!path) return '';
     if (path.startsWith('http') || path.startsWith('data:')) return path;
-    return `${import.meta.env.VITE_API_URL || 'http://localhost:8000'}${path}`;
+    return `${import.meta.env.VITE_API_URL || 'https://api.inventory.cremin-cam.org'}${path}`;
 };
 
 const filteredMovements = computed(() => {
