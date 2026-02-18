@@ -104,6 +104,10 @@ const supplierDetails = computed(() => {
     return suppliers.value.find(s => s.id_fournisseur === product.value.id_fournisseur);
 });
 
+const printPage = () => {
+    window.print();
+};
+
 onMounted(() => {
     fetchData();
 });
@@ -121,6 +125,9 @@ onMounted(() => {
     <v-row v-else-if="product">
         <v-col cols="12" md="8">
             <UiParentCard title="Fiche Produit">
+                <template v-slot:action>
+                    <v-btn color="secondary" variant="outlined" prepend-icon="mdi-printer" @click="printPage">Imprimer / PDF</v-btn>
+                </template>
                 <v-tabs v-model="tab" color="primary">
                     <v-tab value="infos">Informations</v-tab>
                     <v-tab value="history">Historique des mouvements</v-tab>

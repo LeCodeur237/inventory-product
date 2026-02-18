@@ -47,6 +47,16 @@ const MainRoutes = {
             component: () => import('@/views/users/UserProfile.vue')
         },
         {
+            name: 'RapportUser',
+            path: '/users/report',
+            component: () => import('@/views/users/RapportUser.vue')
+        },
+        {
+            name: 'AgentReport',
+            path: '/users/agent-report',
+            component: () => import('@/views/users/AgentReport.vue')
+        },
+        {
             name: 'CompanySettings',
             path: '/settings/company',
             component: () => import('@/views/settings/CompanySettings.vue')
@@ -62,19 +72,24 @@ const MainRoutes = {
             component: () => import('@/views/products/StockValuation.vue')
         },
         {
-            name: '/SettingsPoles',
+            name: 'SettingsPoles',
             path: '/settings/poles',
             component: () => import('@/views/settings/ListPoles.vue')
+        },
+        {
+            name: 'Ordonnances',
+            path: '/settings/orders',
+            component: () => import('@/views/settings/OrdersManage.vue')
+        },
+        {
+            name: 'Notifications',
+            path: '/extra/notifications',
+            component: () => import('@/views/extra/Notifications.vue')
         },
         {
             name: 'Tables',
             path: '/ui/tables',
             component: () => import('@/views/ui-components/Tables.vue')
-        },
-        {
-            name: 'Icons',
-            path: '/icons',
-            component: () => import('@/views/pages/Icons.vue')
         },
         {
             name: 'Starter',

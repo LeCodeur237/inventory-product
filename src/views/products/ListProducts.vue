@@ -76,12 +76,19 @@ const isDeleteDialogOpen = ref(false);
 const productToDelete = ref<Product | null>(null);
 
 // Données pour les listes déroulantes
-const categories = ref<{ id_categorie: string, name_cat: string }[]>([]);
+const categories = ref<{ id_categorie: string, name_cat: string, type: string}[]>([]);
 const brands = ref<{ id_marque: string, nom: string }[]>([]);
 const suppliers = ref<{ id_fournisseur: string, nom: string }[]>([]);
 
 const drawerTitle = computed(() => {
     return editedProduct.value ? 'Modifier le produit' : 'Ajouter un produit';
+});
+
+const categoryOptions = computed(() => {
+    return categories.value.map((c) => ({
+        ...c,
+        category_label: `${c.name_cat}-${c.type}`
+    }));
 });
 
 // Options pour les champs de sélection
@@ -169,6 +176,10 @@ const fetchProfils = async () => {
     } catch (error) {
         console.error("Erreur chargement profils", error);
     }
+};
+
+const printPage = () => {
+    window.print();
 };
 
 onMounted(async () => {
@@ -429,7 +440,10 @@ const formatCurrency = (value: number) => {
         <v-col cols="12">
             <UiParentCard title="Produits en stock">
                 <template v-slot:action>
-                    <v-btn color="primary" prepend-icon="mdi-plus" @click="openAddDrawer">Ajouter un produit</v-btn>
+                    <div class="d-flex ga-2">
+                        <v-btn color="secondary" variant="outlined" prepend-icon="mdi-printer" @click="printPage">Imprimer / PDF</v-btn>
+                        <v-btn color="primary" prepend-icon="mdi-plus" @click="openAddDrawer">Ajouter un produit</v-btn>
+                    </div>
                 </template>
 
                 <v-table class="mt-5" :loading="loading" loading-text="Chargement des produits..." hover>
@@ -515,7 +529,7 @@ const formatCurrency = (value: number) => {
                                 <v-row dense>
                                     <v-col cols="12"><v-text-field v-model="line.nom" label="Nom du produit" variant="outlined" density="compact" :rules="[v => !!v || 'Requis']" @update:model-value="generateRef(line, $event)"></v-text-field></v-col>
                                     <v-col cols="12" md="6"><v-text-field v-model="line.reference" label="Référence" variant="outlined" density="compact"></v-text-field></v-col>
-                                    <v-col cols="12" md="6"><v-select v-model="line.id_categorie" :items="categories" item-title="name_cat" item-value="id_categorie" label="Catégorie" variant="outlined" density="compact" :rules="[v => !!v || 'Requis']"></v-select></v-col>
+                                    <v-col cols="12" md="6"><v-select v-model="line.id_categorie" :items="categoryOptions" item-title="category_label" item-value="id_categorie" label="Catégorie" variant="outlined" density="compact" :rules="[v => !!v || 'Requis']"></v-select></v-col>
                                     <v-col cols="12" md="4"><v-text-field v-model.number="line.prix" type="number" label="Prix Unitaire" variant="outlined" density="compact" min="0"></v-text-field></v-col>
                                     <v-col cols="12" md="4" v-if="!editedProduct"><v-text-field v-model.number="line.quantite_stock" type="number" label="Quantité initiale" variant="outlined" density="compact" min="0"></v-text-field></v-col>
                                     <v-col cols="12" md="4"><v-text-field v-model.number="line.quantite_min_alerte" type="number" label="Seuil d'alerte" variant="outlined" density="compact" min="0"></v-text-field></v-col>

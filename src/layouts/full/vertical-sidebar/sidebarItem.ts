@@ -121,22 +121,6 @@ const sidebarItem: menu[] = [
         roles: ['Admin', 'Agent', 'Agence', 'Controle', 'Direction']
     },
 
-    { header: 'RAPPORTS', roles: ['Admin', 'Direction', 'Controle', 'Agence'] },
-    {
-        title: 'Historique Global',
-        icon: HistoryIcon,
-        to: '/products/global-history',
-        external: false,
-        roles: ['Admin', 'Direction', 'Controle', 'Agence']
-    },
-    {
-        title: 'Valorisation Stock',
-        icon: ReportAnalyticsIcon,
-        to: '/products/stock-valuation',
-        external: false,
-        roles: ['Admin', 'Direction', 'Controle']
-    },
-
     { header: 'Utilisateurs' },
     {
         title: 'List Users',
@@ -159,30 +143,36 @@ const sidebarItem: menu[] = [
         external: false,
         roles: ['Agent']
     },
-
-    { header: 'COMPONENTS' },
     {
-        title: 'Ui Elements',
-        icon: BoxIcon,
-        to: '/ui/alerts',
-        roles: ['Admin'],
+        title: 'Rapport Utilisateurs',
+        icon: ReportAnalyticsIcon,
+        to: '/users/report',
+        external: false,
+        roles: ['Admin', 'Direction', 'Controle']
+    },
     
-    },
 
-    { header: 'auth', roles: ['Admin'] },
+    { header: 'RAPPORTS', roles: ['Admin', 'Direction', 'Controle', 'Agence'] },
     {
-        title: 'Login',
-        icon: LoginIcon,
-        to: '/auth/login',
+        title: 'Rapport Agent',
+        icon: ReportAnalyticsIcon,
+        to: '/users/agent-report',
         external: false,
-        roles: ['Admin']
+        roles: ['Agent']
     },
     {
-        title: 'Register',
-        icon: UserPlusIcon,
-        to: '/auth/register',
+        title: 'Historique Global',
+        icon: HistoryIcon,
+        to: '/products/global-history',
         external: false,
-        roles: ['Admin']
+        roles: ['Admin', 'Direction', 'Controle', 'Agence']
+    },
+    {
+        title: 'Valorisation Stock',
+        icon: ReportAnalyticsIcon,
+        to: '/products/stock-valuation',
+        external: false,
+        roles: ['Admin', 'Direction', 'Controle']
     },
     
     { header: 'Extra' },
@@ -201,11 +191,18 @@ const sidebarItem: menu[] = [
         roles: ['Admin']
     },
     {
-        title: 'Icons',
-        icon: MoodHappyIcon,
-        to: '/icons',
+        title: 'Gestion des Ordonnances',
+        icon:   FileTextIcon,
+        to: '/settings/orders',
         external: false,
-        roles: ['Admin']
+        roles: ['Admin','Direction','Controle']
+    },
+    {
+        title: 'Notifications',
+        icon: AlertCircleIcon,
+        to: '/extra/notifications',
+        external: false,
+        roles: ['Admin', 'Agent', 'Agence', 'Controle', 'Direction']
     }
 ];
 

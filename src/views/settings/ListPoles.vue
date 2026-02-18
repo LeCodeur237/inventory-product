@@ -119,6 +119,10 @@ const deletePole = async () => {
     }
 };
 
+const printPage = () => {
+    window.print();
+};
+
 onMounted(async () => {
     await fetchCurrentUser();
     await Promise.all([fetchPoles(), fetchProfils()]);
@@ -131,7 +135,10 @@ onMounted(async () => {
         <v-col cols="12">
             <UiParentCard title="Liste des Pôles">
                 <template v-slot:action>
-                    <v-btn v-if="canCreate" color="primary" prepend-icon="mdi-plus" @click="openAddDrawer">Ajouter un pôle</v-btn>
+                    <div class="d-flex ga-2">
+                        <v-btn color="secondary" variant="outlined" prepend-icon="mdi-printer" @click="printPage">Imprimer / PDF</v-btn>
+                        <v-btn v-if="canCreate" color="primary" prepend-icon="mdi-plus" @click="openAddDrawer">Ajouter un pôle</v-btn>
+                    </div>
                 </template>
                 <v-table class="mt-5" :loading="loading">
                     <thead>

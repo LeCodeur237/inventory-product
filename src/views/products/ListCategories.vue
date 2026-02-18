@@ -71,7 +71,7 @@ const fetchCategories = async () => {
         const userProfile = profils.value.find(p => p.id_profil === profileId);
         const role = userProfile?.nom?.toLowerCase();
 
-        if (role && !['direction', 'contrôle', 'controle'].some(r => role.includes(r))) {
+        if (role && !['direction', 'contrôle', 'controle', 'admin'].some(r => role.includes(r))) {
             const userAgence = currentUser.value?.agence;
             const userPoleId = currentUser.value?.id_pole || currentUser.value?.pole_id || currentUser.value?.pole?.id_pole;
 
@@ -108,6 +108,10 @@ const fetchProfils = async () => {
     } catch (error) {
         console.error("Erreur chargement profils", error);
     }
+};
+
+const printPage = () => {
+    window.print();
 };
 
 onMounted(async () => {
@@ -197,7 +201,10 @@ const deleteCategory = async () => {
         <v-col cols="12">
             <UiParentCard title="Catégories de produits">
                 <template v-slot:action>
-                    <v-btn color="primary" prepend-icon="mdi-plus" @click="openAddDrawer">Ajouter une catégorie</v-btn>
+                    <div class="d-flex ga-2">
+                        <v-btn color="secondary" variant="outlined" prepend-icon="mdi-printer" @click="printPage">Imprimer / PDF</v-btn>
+                        <v-btn color="primary" prepend-icon="mdi-plus" @click="openAddDrawer">Ajouter une catégorie</v-btn>
+                    </div>
                 </template>
 
                 <v-table class="mt-5" :loading="loading" loading-text="Chargement des catégories...">

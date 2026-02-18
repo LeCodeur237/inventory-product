@@ -131,6 +131,10 @@ const fetchProfils = async () => {
     }
 };
 
+const printPage = () => {
+    window.print();
+};
+
 onMounted(async () => {
     await Promise.all([fetchCurrentUser(), fetchProfils()]);
     await fetchData();
@@ -142,6 +146,9 @@ onMounted(async () => {
     <v-row>
         <v-col cols="12">
             <UiParentCard title="Tableau de bord des stocks">
+                <template v-slot:action>
+                    <v-btn color="secondary" variant="outlined" prepend-icon="mdi-printer" @click="printPage">Imprimer / PDF</v-btn>
+                </template>
                 <v-text-field v-model="search" prepend-inner-icon="mdi-magnify" label="Rechercher un produit..." variant="outlined" density="compact" hide-details class="mb-4"></v-text-field>
 
                 <v-data-table :headers="headers" :items="stockData" :search="search" :loading="loading" density="comfortable" hover>

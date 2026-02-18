@@ -123,6 +123,10 @@ const getImageUrl = (path: string | null) => {
     return `${import.meta.env.VITE_API_URL || 'https://api.inventory.cremin-cam.org'}${path}`;
 };
 
+const printPage = () => {
+    window.print();
+};
+
 onMounted(() => {
     fetchUserProfile();
     fetchProfils();
@@ -159,6 +163,9 @@ onMounted(() => {
         
         <v-col cols="12" md="8">
             <UiParentCard title="Informations personnelles">
+                <template v-slot:action>
+                    <v-btn color="secondary" variant="outlined" prepend-icon="mdi-printer" @click="printPage">Imprimer / PDF</v-btn>
+                </template>
                 <v-form @submit.prevent="saveProfile" class="mt-2">
                     <h6 class="text-subtitle-1 font-weight-bold mb-4">Identité</h6>
                     <v-row>

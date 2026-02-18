@@ -130,6 +130,10 @@ const saveSettings = async () => {
     }
 };
 
+const printPage = () => {
+    window.print();
+};
+
 onMounted(async () => {
     await fetchProfils();
     await fetchCompanySettings();
@@ -153,6 +157,9 @@ onMounted(async () => {
 
         <v-col cols="12" md="8">
             <UiParentCard title="Informations générales">
+                <template v-slot:action>
+                    <v-btn color="secondary" variant="outlined" prepend-icon="mdi-printer" @click="printPage">Imprimer / PDF</v-btn>
+                </template>
                 <v-form @submit.prevent="saveSettings">
                     <h6 class="text-subtitle-1 font-weight-bold mb-4">Détails de l'entreprise</h6>
                     <v-row>
@@ -180,3 +187,4 @@ onMounted(async () => {
         </v-col>
     </v-row>
 </template>
+
