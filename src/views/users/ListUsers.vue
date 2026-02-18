@@ -437,14 +437,14 @@ onMounted(async () => {
                     <v-label class="font-weight-bold mb-1">Matricule</v-label>
                     <v-text-field v-model="userModel.matricule" variant="outlined" color="primary"></v-text-field>
 
-                    <v-label class="font-weight-bold mb-1">Agence</v-label>
+                    <!-- <v-label class="font-weight-bold mb-1">Agence</v-label>
                     <v-text-field v-model="userModel.agence" variant="outlined" color="primary"></v-text-field>
 
                     <v-label class="font-weight-bold mb-1">Lien Image</v-label>
                     <v-text-field v-model="userModel.link_img" variant="outlined" color="primary"></v-text-field>
 
                     <v-label class="font-weight-bold mb-1">Signature</v-label>
-                    <v-text-field v-model="userModel.signature" variant="outlined" color="primary"></v-text-field>
+                    <v-text-field v-model="userModel.signature" variant="outlined" color="primary"></v-text-field> -->
 
                     <v-btn color="primary" type="submit" block class="mt-4" :loading="isFormLoading">Enregistrer</v-btn>
                 </v-form>

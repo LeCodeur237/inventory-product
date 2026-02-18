@@ -1,10 +1,32 @@
 <script setup lang="ts">
-import { ref } from 'vue';
-import { computed } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { useTheme } from 'vuetify';
+import { getDashboardMonthlyEarnings } from '@/api/dashboard';
+import { getApiErrorMessage } from '@/utils/apiError';
 const theme = useTheme();
-const primary = theme.current.value.colors.primary;
 const secondary = theme.current.value.colors.secondary;
+const loading = ref(false);
+const monthlyValue = ref(0);
+const changePct = ref(0);
+const sparklineData = ref<number[]>([0, 0, 0, 0, 0, 0, 0]);
+
+const fetchMonthlyEarnings = async () => {
+    loading.value = true;
+    try {
+        const data = await getDashboardMonthlyEarnings('2026-02');
+        monthlyValue.value = Number(data?.value) || 0;
+        changePct.value = Number(data?.change_pct_vs_previous_month) || 0;
+        sparklineData.value = Array.isArray(data?.sparkline) ? data.sparkline.map((v: any) => Number(v) || 0) : [0, 0, 0, 0, 0, 0, 0];
+    } catch (error) {
+        console.error(getApiErrorMessage(error, 'Erreur chargement monthly earnings.'));
+    } finally {
+        loading.value = false;
+    }
+};
+
+const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'XOF', maximumFractionDigits: 0 }).format(value);
+};
 
 /* Chart */
 const areachartOptions = computed(() => {
@@ -44,14 +66,16 @@ const areachartOptions = computed(() => {
     };
 });
 
-const areaChart = {
-    series: [
-        {
-            name: '',
-            data: [25, 66, 20, 40, 12, 58, 20]
-        }
-    ]
-};
+const areaSeries = computed(() => [
+    {
+        name: '',
+        data: sparklineData.value
+    }
+]);
+
+onMounted(() => {
+    fetchMonthlyEarnings();
+});
 </script>
 <template>
     <v-card elevation="10" class="withbg">
@@ -67,12 +91,12 @@ const areaChart = {
             <v-row>
                 <v-col cols="12">
                     <div class="mt-2">
-                        <h3 class="text-h3">$6,820</h3>
+                        <h3 class="text-h3">{{ formatCurrency(monthlyValue) }}</h3>
                         <div class="mt-1">
                             <v-avatar class="bg-lighterror text-accent" size="25">
                                 <ArrowDownRightIcon size="20" />
                             </v-avatar>
-                            <span class="text-subtitle-1 ml-2 font-weight-bold">+9%</span>
+                            <span class="text-subtitle-1 ml-2 font-weight-bold">{{ changePct >= 0 ? '+' : '' }}{{ changePct }}%</span>
                             <span class="text-subtitle-1 text-muted ml-2">last year</span>
                         </div>
                     </div>
@@ -80,7 +104,10 @@ const areaChart = {
             </v-row>
         </v-card-item>
         <div class="mt-3">
-            <apexchart type="area" height="60" :options="areachartOptions" :series="areaChart.series"> </apexchart>
+            <apexchart v-if="!loading" type="area" height="60" :options="areachartOptions" :series="areaSeries"> </apexchart>
+            <div v-else class="d-flex justify-center py-4">
+                <v-progress-circular indeterminate color="secondary"></v-progress-circular>
+            </div>
         </div>
     </v-card>
 </template>
