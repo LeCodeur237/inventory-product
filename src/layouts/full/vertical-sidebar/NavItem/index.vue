@@ -2,13 +2,18 @@
 import Icon from '../Icon.vue';
 
 const props = defineProps({ item: Object, level: Number });
+
+const normalizedTo = (value) => {
+    if (typeof value !== 'string') return value;
+    return value.trim();
+};
 </script>
 
 <template>
     <!---Single Item-->
     <v-list-item
-        :href="item.external ? item.to : undefined"
-        :to="!item.external ? item.to : undefined"
+        :href="item.external ? normalizedTo(item.to) : undefined"
+        :to="!item.external ? normalizedTo(item.to) : undefined"
         rounded
         class="mb-1"
         color="primary"

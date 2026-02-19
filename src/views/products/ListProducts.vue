@@ -70,6 +70,7 @@ const newSupplier = ref({
 
 // Pour gérer la saisie dans les autocompletes
 const supplierSearch = ref('');
+const csvFile = ref<File | null>(null);
 
 // --- Suppression ---
 const isDeleteDialogOpen = ref(false);
@@ -127,6 +128,37 @@ const products = ref<Product[]>([]);
 const loading = ref(true);
 const currentUser = ref<any>(null);
 const profils = ref<any[]>([]);
+const currentPage = ref(1);
+const itemsPerPage = ref(10);
+const search = ref('');
+
+const filteredProducts = computed(() => {
+    const keyword = search.value.trim().toLowerCase();
+    if (!keyword) return products.value;
+
+    return products.value.filter((item) => {
+        const categoryName = getCategoryName(item.id_categorie).toLowerCase();
+        return (
+            (item.nom || '').toLowerCase().includes(keyword) ||
+            (item.reference || '').toLowerCase().includes(keyword) ||
+            (item.agence || '').toLowerCase().includes(keyword) ||
+            categoryName.includes(keyword)
+        );
+    });
+});
+
+const totalPages = computed(() => {
+    return Math.max(1, Math.ceil(filteredProducts.value.length / itemsPerPage.value));
+});
+
+const paginatedProducts = computed(() => {
+    const start = (currentPage.value - 1) * itemsPerPage.value;
+    return filteredProducts.value.slice(start, start + itemsPerPage.value);
+});
+
+const getRowNumber = (index: number) => {
+    return (currentPage.value - 1) * itemsPerPage.value + index + 1;
+};
 
 // Récupérer les produits depuis l'APIPôle
 const fetchProducts = async () => {
@@ -153,6 +185,7 @@ const fetchProducts = async () => {
             }
         }
         products.value = data;
+        currentPage.value = 1;
     } catch (error) {
         toast.error("Impossible de charger les produits.");
     } finally {
@@ -224,6 +257,7 @@ const openAddDrawer = async () => {
             refSuffix: Math.floor(1000 + Math.random() * 9000).toString()
         }]
     };
+    csvFile.value = null;
     isDrawerOpen.value = true;
 };
 
@@ -284,6 +318,117 @@ const removeLine = (index: number) => {
     }
 };
 
+const parseCsvLine = (line: string, delimiter: string) => {
+    const result: string[] = [];
+    let current = '';
+    let inQuotes = false;
+
+    for (let i = 0; i < line.length; i++) {
+        const char = line[i];
+        if (char === '"') {
+            inQuotes = !inQuotes;
+            continue;
+        }
+        if (char === delimiter && !inQuotes) {
+            result.push(current.trim());
+            current = '';
+        } else {
+            current += char;
+        }
+    }
+    result.push(current.trim());
+    return result;
+};
+
+const importProductsFromCsv = async () => {
+    if (!csvFile.value) {
+        toast.warning('Veuillez sélectionner un fichier CSV.');
+        return;
+    }
+
+    try {
+        const text = await csvFile.value.text();
+        const lines = text.split(/\r?\n/).filter((l) => l.trim().length > 0);
+        if (lines.length < 2) {
+            toast.warning('Le fichier CSV est vide ou invalide.');
+            return;
+        }
+
+        const delimiter = lines[0].includes(';') ? ';' : ',';
+        const headers = parseCsvLine(lines[0], delimiter).map((h) => h.trim().toLowerCase());
+        const headerMap: Record<string, number> = {};
+        headers.forEach((h, i) => {
+            headerMap[h] = i;
+        });
+
+        const getCell = (cells: string[], key: string) => {
+            const idx = headerMap[key];
+            if (idx === undefined) return '';
+            return (cells[idx] ?? '').trim();
+        };
+
+        const importedLines = lines
+            .slice(1)
+            .map((line) => {
+                const cells = parseCsvLine(line, delimiter);
+                const nom = getCell(cells, 'nom');
+                const description = getCell(cells, 'description');
+                const reference = getCell(cells, 'reference');
+                const idCategorie = getCell(cells, 'id_categorie') || null;
+                const idMarqueRaw = getCell(cells, 'id_marque');
+                const idFournisseurRaw = getCell(cells, 'id_fournisseur');
+                const quantiteStock = Number(getCell(cells, 'quantite_stock') || 0);
+                const prix = Number(getCell(cells, 'prix') || 0);
+                const quantiteMinAlerte = Number(getCell(cells, 'quantite_min_alerte') || 0);
+
+                return {
+                    nom,
+                    description,
+                    reference,
+                    quantite_stock: Number.isFinite(quantiteStock) ? quantiteStock : 0,
+                    id: Symbol(),
+                    brandSearch: '',
+                    quantite_min_alerte: Number.isFinite(quantiteMinAlerte) ? quantiteMinAlerte : 0,
+                    prix: Number.isFinite(prix) ? prix : 0,
+                    id_categorie: idCategorie,
+                    id_marque: idMarqueRaw && idMarqueRaw.toLowerCase() !== 'null' ? idMarqueRaw : null,
+                    refSuffix: Math.floor(1000 + Math.random() * 9000).toString(),
+                    csv_supplier_id: idFournisseurRaw && idFournisseurRaw.toLowerCase() !== 'null' ? idFournisseurRaw : null
+                };
+            })
+            .filter((item) => item.nom);
+
+        if (importedLines.length === 0) {
+            toast.warning('Aucune ligne valide à importer.');
+            return;
+        }
+
+        const firstSupplier = importedLines.find((l: any) => l.csv_supplier_id)?.csv_supplier_id || null;
+        if (!batchEntryModel.value.id_fournisseur && firstSupplier) {
+            batchEntryModel.value.id_fournisseur = firstSupplier;
+        }
+
+        batchEntryModel.value.lignes = importedLines.map((l: any) => ({
+            nom: l.nom,
+            description: l.description,
+            reference: l.reference,
+            quantite_stock: l.quantite_stock,
+            id: l.id,
+            brandSearch: l.brandSearch,
+            quantite_min_alerte: l.quantite_min_alerte,
+            prix: l.prix,
+            id_categorie: l.id_categorie,
+            id_marque: l.id_marque,
+            refSuffix: l.refSuffix
+        }));
+
+        toast.success(`${importedLines.length} produit(s) importé(s) depuis le CSV.`);
+    } catch (error) {
+        console.error(error);
+        toast.error("Erreur lors de l'import du CSV.");
+    }
+};
+
 const activeLineIndexForBrand = ref(0);
 const prepareNewBrand = (name: string, index: number) => {
     newBrandName.value = name;
@@ -332,6 +477,21 @@ watch(supplierSearch, (val) => {
         // Si la valeur tapée n'existe pas, on la garde pour la création
         newSupplier.value.nom = val;
     }
+});
+
+watch(totalPages, (newTotal) => {
+    if (currentPage.value > newTotal) {
+        currentPage.value = newTotal;
+    }
+});
+
+watch(currentPage, (newPage) => {
+    if (newPage < 1) currentPage.value = 1;
+    if (newPage > totalPages.value) currentPage.value = totalPages.value;
+});
+
+watch(search, () => {
+    currentPage.value = 1;
 });
 
 const generateRef = (line: any, newName: string) => {
@@ -446,9 +606,20 @@ const formatCurrency = (value: number) => {
                     </div>
                 </template>
 
+                <v-text-field
+                    v-model="search"
+                    prepend-inner-icon="mdi-magnify"
+                    label="Rechercher un produit, une référence, une catégorie ou une agence..."
+                    variant="outlined"
+                    density="compact"
+                    hide-details
+                    class="mb-4"
+                ></v-text-field>
+
                 <v-table class="mt-5" :loading="loading" loading-text="Chargement des produits..." hover>
                     <thead>
                         <tr>
+                            <th class="text-left text-uppercase">N°</th>
                             <th class="text-left text-uppercase">Nom du produit</th>
                             <th class="text-left text-uppercase">Référence</th>
                             <th class="text-left text-uppercase">Prix Unitaire</th>
@@ -459,7 +630,8 @@ const formatCurrency = (value: number) => {
                         </tr>
                     </thead>
                     <tbody v-if="!loading">
-                        <tr v-for="item in products" :key="item.id_product" @click="openPreview(item)" style="cursor: pointer">
+                        <tr v-for="(item, index) in paginatedProducts" :key="item.id_product" @click="openPreview(item)" style="cursor: pointer">
+                            <td>{{ getRowNumber(index) }}</td>
                             <td>{{ item.nom }}</td>
                             <td>{{ item.reference }}</td>
                             <td>{{ formatCurrency(item.prix) }}</td>
@@ -479,8 +651,15 @@ const formatCurrency = (value: number) => {
                                 </v-btn>
                             </td>
                         </tr>
+                        <tr v-if="paginatedProducts.length === 0">
+                            <td colspan="8" class="text-center text-medium-emphasis py-4">Aucun produit disponible.</td>
+                        </tr>
                     </tbody>
                 </v-table>
+
+                <div class="d-flex justify-center mt-4" v-if="totalPages > 1">
+                    <v-pagination v-model="currentPage" :length="totalPages" rounded="circle"></v-pagination>
+                </div>
             </UiParentCard>
         </v-col>
 
@@ -513,6 +692,25 @@ const formatCurrency = (value: number) => {
                         <v-col cols="12" md="6">
                             <v-label class="font-weight-bold mb-1">Date de réception</v-label>
                             <v-text-field v-model="batchEntryModel.date_reception" type="date" variant="outlined" color="primary" :rules="[v => !!v || 'Requis']"></v-text-field>
+                        </v-col>
+                    </v-row>
+
+                    <v-row v-if="!editedProduct">
+                        <v-col cols="12" md="8">
+                            <v-file-input
+                                v-model="csvFile"
+                                label="Importer un fichier CSV"
+                                variant="outlined"
+                                density="compact"
+                                prepend-icon="mdi-file-delimited-outline"
+                                accept=".csv,text/csv"
+                                hide-details
+                            ></v-file-input>
+                        </v-col>
+                        <v-col cols="12" md="4" class="d-flex align-end">
+                            <v-btn color="secondary" variant="outlined" block prepend-icon="mdi-upload" @click="importProductsFromCsv">
+                                Importer CSV
+                            </v-btn>
                         </v-col>
                     </v-row>
 

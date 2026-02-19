@@ -29,4 +29,13 @@ export default defineConfig({
       './src/**/*.vue',
     ],
   },
+  server: {
+    proxy: {
+      '/api': {
+        target: 'https://api.inventory.cremin-cam.org',
+        changeOrigin: true,
+        secure: true,
+      },
+    },
+  },
 });

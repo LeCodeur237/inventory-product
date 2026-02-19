@@ -1,17 +1,17 @@
 import axios from 'axios';
 
-// Créer une instance d'axios
+const apiBaseUrl =
+    import.meta.env.VITE_API_BASE_URL ||
+    (import.meta.env.DEV ? '/api' : 'https://api.inventory.cremin-cam.org/api');
+
 const axiosInstance = axios.create({
-    baseURL: 'https://api.inventory.cremin-cam.org/api' // Votre URL d'API
+    baseURL: apiBaseUrl
 });
 
-// Intercepteur pour ajouter le token JWT à chaque requête
 axiosInstance.interceptors.request.use(
     (config) => {
-        // Récupérer le token depuis le localStorage
         const token = localStorage.getItem('authToken');
         if (token) {
-            // Ajouter le token dans les en-têtes d'autorisation
             config.headers.Authorization = `Bearer ${token}`;
         }
         return config;

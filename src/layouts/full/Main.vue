@@ -78,13 +78,13 @@ const toggleTheme = () => {
             <perfect-scrollbar class="scrollnavbar">
                 <v-list class="pa-6">
                     <!---Menu Loop -->
-                    <template v-for="(item, i) in sidebarMenu">
+                    <template v-for="(item, i) in sidebarMenu" :key="`${item.header || item.title || 'item'}-${i}`">
                         <!---Item Sub Header -->
-                        <NavGroup :item="item" v-if="item.header" :key="item.title" />
+                        <NavGroup :item="item" v-if="item.header" :key="`header-${i}`" />
 
-                        <NavCollapse class="leftPadding" :item="item" :level="0" v-else-if="item.children" />
+                        <NavCollapse class="leftPadding" :item="item" :level="0" v-else-if="item.children" :key="`collapse-${item.title || i}`" />
                         <!---Single Item-->
-                        <NavItem :item="item" v-else class="leftPadding" />
+                        <NavItem :item="item" v-else class="leftPadding" :key="`item-${item.to || item.title || i}`" />
                         <!---End Single Item-->
                     </template>
                 </v-list>
