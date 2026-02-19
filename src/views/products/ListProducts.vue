@@ -502,8 +502,21 @@ const generateRef = (line: any, newName: string) => {
 };
 
 const saveProduct = async () => {
-    const { valid } = await productForm.value!.validate();
-    if (!valid) return;
+    if (!productForm.value) {
+        toast.error("Formulaire indisponible. Réessayez.");
+        return;
+    }
+
+    const { valid } = await productForm.value.validate();
+    if (!valid) {
+        toast.warning("Veuillez compléter les champs obligatoires avant d'enregistrer.");
+        return;
+    }
+
+    if (!batchEntryModel.value.lignes.length) {
+        toast.warning("Aucune ligne produit à enregistrer.");
+        return;
+    }
 
     isFormLoading.value = true;
     try {
@@ -562,9 +575,10 @@ const saveProduct = async () => {
         isDrawerOpen.value = false;
         await fetchProducts(); // Rafraîchir la liste
 
-    } catch (error) {
+    } catch (error: any) {
         const action = editedProduct.value ? 'modification' : 'création';
-        toast.error(`Erreur lors de la ${action} du produit.`);
+        const apiMessage = error?.response?.data?.message || error?.response?.data?.error || '';
+        toast.error(apiMessage ? `${apiMessage}` : `Erreur lors de la ${action} du produit.`);
         console.error(error);
     } finally {
         isFormLoading.value = false;

@@ -9,6 +9,7 @@ const valid = ref(true);
 const loading = ref(false);
 const login = ref('');
 const password = ref('');
+const showPassword = ref(false);
 const errorMessage = ref('');
 const router = useRouter();
 const toast = useToast();
@@ -63,7 +64,15 @@ async function validate() {
             </v-col>
             <v-col cols="12">
                 <v-label class="font-weight-bold mb-1">Mot de passe</v-label>
-                <v-text-field v-model="password" :rules="passwordRules" variant="outlined" type="password" color="primary"></v-text-field>
+                <v-text-field
+                    v-model="password"
+                    :rules="passwordRules"
+                    variant="outlined"
+                    :type="showPassword ? 'text' : 'password'"
+                    :append-inner-icon="showPassword ? 'mdi-eye-off' : 'mdi-eye'"
+                    color="primary"
+                    @click:append-inner="showPassword = !showPassword"
+                ></v-text-field>
             </v-col>
             <v-col cols="12" class="pt-0">
                 <div class="d-flex flex-wrap align-center ml-n2">

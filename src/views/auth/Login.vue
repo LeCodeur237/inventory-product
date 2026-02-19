@@ -30,18 +30,20 @@ const toggleTheme = () => {
                                 <Logo />
                             </div>
                             <LoginForm />
-                            <h6 class="text-h6 text-muted font-weight-medium d-flex justify-center align-center mt-3">
-                                New to use Inventory Pro?
-                                <RouterLink to="/auth/register"
-                                    class="text-primary text-decoration-none text-body-1 opacity-1 font-weight-medium pl-2">
-                                    Create an account</RouterLink>
-                            </h6>
-                            <h6 class="text-h6 text-muted font-weight-medium d-flex justify-center align-center mt-1">
-                                Entreprise déjà créée ?
-                                <RouterLink to="/auth/verify-company"
-                                    class="text-primary text-decoration-none text-body-1 opacity-1 font-weight-medium pl-2">
-                                    Créer un compte admin</RouterLink>
-                            </h6>
+                            <div class="mt-4 text-center">
+                                <div class="d-flex flex-column flex-sm-row justify-center align-center ga-1 ga-sm-2 text-body-2 text-sm-body-1 text-muted font-weight-medium">
+                                    <span>New to use Inventory Pro?</span>
+                                    <RouterLink to="/auth/register" class="text-primary text-decoration-none font-weight-medium">
+                                        Create an account
+                                    </RouterLink>
+                                </div>
+                                <div class="d-flex flex-column flex-sm-row justify-center align-center ga-1 ga-sm-2 text-body-2 text-sm-body-1 text-muted font-weight-medium mt-2">
+                                    <span>Entreprise déjà créée ?</span>
+                                    <RouterLink to="/auth/verify-company" class="text-primary text-decoration-none font-weight-medium">
+                                        Créer un compte admin
+                                    </RouterLink>
+                                </div>
+                            </div>
                         </v-card-item>
                     </v-card>
                 </v-col>
