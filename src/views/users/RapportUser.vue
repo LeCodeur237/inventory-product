@@ -37,6 +37,7 @@ const loading = ref(false);
 const users = ref<User[]>([]);
 const profils = ref<Profil[]>([]);
 const demandes = ref<Demande[]>([]);
+const currentUser = ref<User | null>(null);
 
 const normalizeArray = (payload: any) => {
     if (Array.isArray(payload)) return payload;
@@ -47,14 +48,39 @@ const normalizeArray = (payload: any) => {
 const fetchData = async () => {
     loading.value = true;
     try {
-        const [usersRes, profilsRes, demandesRes] = await Promise.all([
+        const [usersRes, profilsRes, demandesRes, currentUserRes] = await Promise.all([
             axiosInstance.get('/users'),
             axiosInstance.get('/profils'),
-            axiosInstance.get('/demandes')
+            axiosInstance.get('/demandes'),
+            axiosInstance.get('/user')
         ]);
-        users.value = normalizeArray(usersRes.data);
-        profils.value = normalizeArray(profilsRes.data);
-        demandes.value = normalizeArray(demandesRes.data);
+        const allUsers: User[] = normalizeArray(usersRes.data);
+        const allProfils: Profil[] = normalizeArray(profilsRes.data);
+        const allDemandes: Demande[] = normalizeArray(demandesRes.data);
+        const me: User | null = currentUserRes?.data || null;
+
+        currentUser.value = me;
+        profils.value = allProfils;
+
+        const myProfileId = me?.profil_id || me?.profil?.id_profil || (me as any)?.id_profil || null;
+        const myProfileName =
+            me?.profil?.nom ||
+            allProfils.find((p) => p.id_profil === myProfileId)?.nom ||
+            '';
+        const isDirectionAdmin = myProfileName.toLowerCase().includes('direction');
+        const myAgence = me?.agence || null;
+
+        if (isDirectionAdmin || !myAgence) {
+            users.value = allUsers;
+            demandes.value = allDemandes;
+            return;
+        }
+
+        const allowedUsers = allUsers.filter((u) => (u.agence || '') === myAgence);
+        const allowedIds = new Set(allowedUsers.map((u) => u.id_users));
+
+        users.value = allowedUsers;
+        demandes.value = allDemandes.filter((d) => allowedIds.has(d.id_users));
     } catch (error: any) {
         toast.error(error?.response?.data?.message || 'Erreur chargement rapport utilisateurs.');
     } finally {

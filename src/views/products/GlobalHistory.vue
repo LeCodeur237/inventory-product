@@ -1,13 +1,13 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { ref, onMounted, computed } from 'vue';
 import BaseBreadcrumb from '@/components/shared/BaseBreadcrumb.vue';
 import UiParentCard from '@/components/shared/UiParentCard.vue';
 import axiosInstance from '@/utils/axios';
 import { useToast } from 'vue-toastification';
-import { PrinterIcon } from 'vue-tabler-icons';
+import { PrinterIcon, EyeIcon } from 'vue-tabler-icons';
 
 const toast = useToast();
-const page = ref({ title: 'Historique Global des Opérations' });
+const page = ref({ title: 'Historique Global des OpÃ©rations' });
 const breadcrumbs = ref([
     { title: 'Rapports', disabled: false, href: '#' },
     { title: 'Historique Global', disabled: true, href: '#' }
@@ -20,14 +20,24 @@ const filterType = ref('ALL'); // ALL, ENTREE, SORTIE
 const currentUser = ref<any>(null);
 const company = ref<any>(null);
 const profils = ref<any[]>([]);
+const isViewDialogOpen = ref(false);
+const selectedGroup = ref<any>(null);
+const printTypeOrder = ['informatique', 'bancaire', 'bureau', 'entretien', 'electrique', 'autres'];
+const printTypeLabels: Record<string, string> = {
+    informatique: 'Informatique',
+    bancaire: 'Bancaire',
+    bureau: 'Bureau',
+    entretien: 'Entretien',
+    electrique: 'Electrique',
+    autres: 'Autres'
+};
 
 const headers = [
     { title: 'Date', key: 'date', align: 'start' as const },
-    { title: 'N° Ordre', key: 'num_ordre', align: 'start' as const },
-    { title: 'Produit', key: 'product_name', align: 'start' as const },
+    { title: 'NÂ° Ordre', key: 'num_ordre', align: 'start' as const },
     { title: 'Type', key: 'type', align: 'center' as const },
-    { title: 'Quantité', key: 'quantite', align: 'end' as const },
-    { title: 'Prix Unitaire', key: 'prix', align: 'end' as const },
+    { title: 'Nb Lignes', key: 'nb_lignes', align: 'end' as const },
+    { title: 'QuantitÃ© Totale', key: 'quantite_totale', align: 'end' as const },
     { title: 'Valeur Totale', key: 'valeur_totale', align: 'end' as const },
     { title: 'Tiers / Observation', key: 'tiers', align: 'start' as const },
     { title: 'Actions', key: 'actions', align: 'end' as const, sortable: false },
@@ -36,28 +46,30 @@ const headers = [
 const fetchData = async () => {
     loading.value = true;
     try {
-        // On récupère les entrées et les sorties en parallèle
-        // Note: On suppose ici que ces endpoints existent et retournent toutes les données
-        const [entriesRes, exitsRes, productsRes, usersRes, suppliersRes] = await Promise.all([
+        // On rÃ©cupÃ¨re les entrÃ©es et les sorties en parallÃ¨le
+        // Note: On suppose ici que ces endpoints existent et retournent toutes les donnÃ©es
+        const [entriesRes, exitsRes, productsRes, usersRes, suppliersRes, categoriesRes] = await Promise.all([
             axiosInstance.get('/stock/entries'),
             axiosInstance.get('/stock/exits'),
             axiosInstance.get('/products'),
             axiosInstance.get('/users'),
-            axiosInstance.get('/fournisseurs')
+            axiosInstance.get('/fournisseurs'),
+            axiosInstance.get('/categories')
         ]);
 
         const products = productsRes.data;
         const users = usersRes.data;
         const suppliers = suppliersRes.data;
+        const categories = categoriesRes.data;
 
-        // Filtrage des produits selon le rôle/agence/pôle
+        // Filtrage des produits selon le rÃ´le/agence/pÃ´le
         let allowedProductIds = new Set<string>();
         const profileId = currentUser.value?.id_profil || currentUser.value?.profil_id || currentUser.value?.profil?.id_profil;
         const userProfile = profils.value.find(p => p.id_profil === profileId);
         const role = userProfile?.nom?.toLowerCase();
         let isRestricted = false;
 
-        if (role && !['direction', 'contrôle', 'controle'].some(r => role.includes(r))) {
+        if (role && !['direction', 'contrÃ´le', 'controle'].some(r => role.includes(r))) {
             const userAgence = currentUser.value?.agence;
             const userPoleId = currentUser.value?.id_pole || currentUser.value?.pole_id || currentUser.value?.pole?.id_pole;
 
@@ -89,8 +101,14 @@ const fetchData = async () => {
             const s = suppliers.find((x: any) => x.id_fournisseur === id);
             return s ? s.nom : id || 'Fournisseur inconnu';
         };
+        const getProductCategoryType = (id: string) => {
+            const p = products.find((x: any) => x.id_product === id);
+            if (!p?.id_categorie) return 'Non defini';
+            const c = categories.find((x: any) => x.id_categorie === p.id_categorie);
+            return c?.type || 'Non defini';
+        };
 
-        // Normalisation des entrées
+        // Normalisation des entrÃ©es
         const entriesData = isRestricted ? entriesRes.data.filter((e: any) => allowedProductIds.has(e.id_product)) : entriesRes.data;
         const entries = entriesData.map((e: any) => {
             const prixUnitaire = Number(e.prix_achat) || getProductPrice(e.id_product) || 0;
@@ -100,6 +118,7 @@ const fetchData = async () => {
                 date: new Date(e.date_reception),
                 product_name: e.product ? e.product.nom : getProductName(e.id_product),
                 type: 'ENTREE',
+                product_type: getProductCategoryType(e.id_product),
                 quantite: e.quantite_entree,
                 prix: prixUnitaire,
                 valeur_totale: (e.quantite_entree * prixUnitaire),
@@ -117,6 +136,7 @@ const fetchData = async () => {
                 date: new Date(s.date_sortie),
                 product_name: s.product ? s.product.nom : getProductName(s.id_product),
                 type: 'SORTIE',
+                product_type: getProductCategoryType(s.id_product),
                 quantite: s.quantite_sortie,
                 prix: prixUnitaire,
                 valeur_totale: (s.quantite_sortie * prixUnitaire),
@@ -124,7 +144,7 @@ const fetchData = async () => {
             };
         });
 
-        // Fusion et tri par date décroissante
+        // Fusion et tri par date dÃ©croissante
         movements.value = [...entries, ...exits].sort((a, b) => b.date.getTime() - a.date.getTime());
 
     } catch (error) {
@@ -171,49 +191,277 @@ const getImageUrl = (path: string | null) => {
 };
 
 const filteredMovements = computed(() => {
-    let data = movements.value;
+    const groupsMap = new Map<string, any>();
+
+    movements.value.forEach((m: any) => {
+        const groupOrder = m.num_ordre && m.num_ordre !== '-' ? m.num_ordre : m.id;
+        const groupKey = `${m.type}__${groupOrder}`;
+
+        if (!groupsMap.has(groupKey)) {
+            groupsMap.set(groupKey, {
+                id: groupKey,
+                num_ordre: m.num_ordre || '-',
+                type: m.type,
+                date: m.date,
+                lines: [],
+                nb_lignes: 0,
+                quantite_totale: 0,
+                valeur_totale: 0,
+                tiers_set: new Set<string>()
+            });
+        }
+
+        const group = groupsMap.get(groupKey);
+        group.lines.push(m);
+        group.nb_lignes += 1;
+        group.quantite_totale += Number(m.quantite) || 0;
+        group.valeur_totale += Number(m.valeur_totale) || 0;
+        group.tiers_set.add(m.tiers || '-');
+
+        if (m.date && new Date(m.date).getTime() > new Date(group.date).getTime()) {
+            group.date = m.date;
+        }
+    });
+
+    let data = Array.from(groupsMap.values()).map((g: any) => ({
+        ...g,
+        tiers: Array.from(g.tiers_set).join(', ')
+    }));
 
     if (filterType.value !== 'ALL') {
-        data = data.filter(m => m.type === filterType.value);
+        data = data.filter((m: any) => m.type === filterType.value);
     }
 
     if (search.value) {
         const s = search.value.toLowerCase();
-        data = data.filter(m => 
-            m.product_name.toLowerCase().includes(s) || 
-            m.tiers.toLowerCase().includes(s)
+        data = data.filter((m: any) =>
+            m.num_ordre.toLowerCase().includes(s) ||
+            m.tiers.toLowerCase().includes(s) ||
+            m.lines.some((line: any) => (line.product_name || '').toLowerCase().includes(s))
         );
     }
 
-    return data;
+    return data.sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
 });
 
 const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'XOF' }).format(value);
 };
 
-const printMovement = (item: any) => {
-    // Récupérer tous les produits liés au même numéro d'ordre
-    let itemsToPrint = [item];
-    if (item.num_ordre && item.num_ordre !== '-') {
-        itemsToPrint = movements.value.filter(m => m.num_ordre === item.num_ordre && m.type === item.type);
-    }
-    const totalDocumentValue = itemsToPrint.reduce((sum, curr) => sum + curr.valeur_totale, 0);
+const getTypeBucket = (typeLabel: string) => {
+    const t = (typeLabel || '').toLowerCase();
+    if (t.includes('informat')) return 'informatique';
+    if (t.includes('bancair')) return 'bancaire';
+    if (t.includes('bureau')) return 'bureau';
+    if (t.includes('entretien')) return 'entretien';
+    if (t.includes('electri') || t.includes('electri')) return 'electrique';
+    return 'autres';
+};
 
+const escapeHtml = (value: string) => {
+    return (value || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+};
+
+const exportToExcel = () => {
+    const rows = filteredMovements.value;
+    if (!rows.length) {
+        toast.warning("Aucune donnÃ©e Ã  exporter.");
+        return;
+    }
+
+    let totalGeneral = 0;
+    const bodyRows = rows.map((item: any, index: number) => {
+        totalGeneral += Number(item.valeur_totale) || 0;
+        return `
+            <tr>
+                <td>${index + 1}</td>
+                <td>${escapeHtml(new Date(item.date).toLocaleDateString())}</td>
+                <td>${escapeHtml(item.num_ordre || '-')}</td>
+                <td>${escapeHtml(item.type || '-')}</td>
+                <td style="text-align:right;">${item.nb_lignes ?? 0}</td>
+                <td style="text-align:right;">${item.quantite_totale ?? 0}</td>
+                <td style="text-align:right;">${item.valeur_totale ?? 0}</td>
+                <td>${escapeHtml(item.tiers || '-')}</td>
+            </tr>
+        `;
+    }).join('');
+
+    const tableHtml = `
+        <html>
+            <head><meta charset="UTF-8" /></head>
+            <body>
+                <table border="1" style="border-collapse:collapse;">
+                    <thead>
+                        <tr>
+                            <th>NÂ°</th>
+                            <th>Date</th>
+                            <th>NÂ° Ordre</th>
+                            <th>Type</th>
+                            <th>Nb lignes</th>
+                            <th>QuantitÃ© totale</th>
+                            <th>Valeur totale</th>
+                            <th>Tiers / Observation</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${bodyRows}
+                        <tr>
+                            <td colspan="6" style="text-align:right;"><strong>Total gÃ©nÃ©ral</strong></td>
+                            <td style="text-align:right;"><strong>${totalGeneral}</strong></td>
+                            <td></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </body>
+        </html>
+    `;
+
+    const blob = new Blob([tableHtml], { type: 'application/vnd.ms-excel;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    const filterLabel = (filterType.value || 'ALL').toLowerCase();
+    const date = new Date().toISOString().slice(0, 10);
+    link.href = url;
+    link.download = `historique-global-${filterLabel}-${date}.xls`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+};
+
+const exportGroupToExcel = (group: any) => {
+    const rows = group?.lines || [];
+    if (!rows.length) {
+        toast.warning("Aucune ligne Ã  exporter.");
+        return;
+    }
+
+    let totalGeneral = 0;
+    const bodyRows = rows.map((line: any, index: number) => {
+        const value = Number(line.valeur_totale) || 0;
+        totalGeneral += value;
+        return `
+            <tr>
+                <td>${index + 1}</td>
+                <td>${escapeHtml(new Date(line.date).toLocaleDateString())}</td>
+                <td>${escapeHtml(group.num_ordre || '-')}</td>
+                <td>${escapeHtml(line.product_name || '-')}</td>
+                <td style="text-align:right;">${line.quantite ?? 0}</td>
+                <td style="text-align:right;">${line.prix ?? 0}</td>
+                <td style="text-align:right;">${value}</td>
+                <td>${escapeHtml(group.tiers || '-')}</td>
+            </tr>
+        `;
+    }).join('');
+
+    const tableHtml = `
+        <html>
+            <head><meta charset="UTF-8" /></head>
+            <body>
+                <table border="1" style="border-collapse:collapse;">
+                    <thead>
+                        <tr>
+                            <th>NÂ°</th>
+                            <th>Date</th>
+                            <th>NÂ° Ordre</th>
+                            <th>Produit</th>
+                            <th>QuantitÃ©</th>
+                            <th>Prix unitaire</th>
+                            <th>Valeur totale</th>
+                            <th>Tiers / Observation</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${bodyRows}
+                        <tr>
+                            <td colspan="6" style="text-align:right;"><strong>Total gÃ©nÃ©ral</strong></td>
+                            <td style="text-align:right;"><strong>${totalGeneral}</strong></td>
+                            <td></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </body>
+        </html>
+    `;
+
+    const blob = new Blob([tableHtml], { type: 'application/vnd.ms-excel;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    const typeLabel = (group.type || 'mouvement').toLowerCase();
+    const orderLabel = (group.num_ordre || 'sans-numero').replace(/[^\w-]/g, '_');
+    const date = new Date().toISOString().slice(0, 10);
+    link.href = url;
+    link.download = `historique-${typeLabel}-${orderLabel}-${date}.xls`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+};
+
+const printMovement = (item: any) => {
+    const itemsToPrint = item.lines || [];
+    if (!itemsToPrint.length) return;
+
+    const totalDocumentValue = itemsToPrint.reduce((sum: number, curr: any) => sum + curr.valeur_totale, 0);
     const isEntry = item.type === 'ENTREE';
-    const title = isEntry ? 'BON DE RÉCEPTION' : 'BON DE SORTIE';
-    const tiersLabel = isEntry ? 'Fournisseur' : 'Bénéficiaire';
+    const title = isEntry ? 'BON DE RECEPTION' : 'BON DE SORTIE';
+    const tiersLabel = isEntry ? 'Fournisseur' : 'Beneficiaire';
     const color = isEntry ? '#4caf50' : '#ff9800';
     const logoUrl = company.value && company.value.logo ? getImageUrl(company.value.logo) : '';
 
-    const rowsHtml = itemsToPrint.map(line => `
-        <tr>
-            <td style="padding: 12px; border: 1px solid #ddd;">${line.product_name}</td>
-            <td style="padding: 12px; border: 1px solid #ddd; text-align: right;">${line.quantite}</td>
-            <td style="padding: 12px; border: 1px solid #ddd; text-align: right;">${formatCurrency(line.prix)}</td>
-            <td style="padding: 12px; border: 1px solid #ddd; text-align: right;">${formatCurrency(line.valeur_totale)}</td>
-        </tr>
-    `).join('');
+    const grouped: Record<string, any[]> = {
+        informatique: [],
+        bancaire: [],
+        bureau: [],
+        entretien: [],
+        electrique: [],
+        autres: []
+    };
+    itemsToPrint.forEach((line: any) => {
+        grouped[getTypeBucket(line.product_type || '')].push(line);
+    });
+
+    let sectionsHtml = '';
+    printTypeOrder.forEach((key) => {
+        const rows = grouped[key];
+        if (!rows.length) return;
+
+        const rowsHtml = rows.map((line: any) => `
+            <tr>
+                <td style="padding: 12px; border: 1px solid #ddd;">${line.product_name}</td>
+                <td style="padding: 12px; border: 1px solid #ddd; text-align: right;">${line.quantite}</td>
+                <td style="padding: 12px; border: 1px solid #ddd; text-align: right;">${formatCurrency(line.prix)}</td>
+                <td style="padding: 12px; border: 1px solid #ddd; text-align: right;">${formatCurrency(line.valeur_totale)}</td>
+            </tr>
+        `).join('');
+        const sectionTotal = rows.reduce((sum: number, line: any) => sum + (Number(line.valeur_totale) || 0), 0);
+
+        sectionsHtml += `
+            <h3 style="margin: 20px 0 10px; color: #1f2937;">Type: ${printTypeLabels[key]}</h3>
+            <table style="width: 100%; border-collapse: collapse; margin-bottom: 24px;">
+                <thead>
+                    <tr style="background-color: #f2f2f2;">
+                        <th style="padding: 12px; border: 1px solid #ddd; text-align: left;">Designation</th>
+                        <th style="padding: 12px; border: 1px solid #ddd; text-align: right;">Quantite</th>
+                        <th style="padding: 12px; border: 1px solid #ddd; text-align: right;">Prix Unitaire</th>
+                        <th style="padding: 12px; border: 1px solid #ddd; text-align: right;">Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${rowsHtml}
+                    <tr style="background-color: #f9f9f9; font-weight: bold;">
+                        <td colspan="3" style="padding: 12px; border: 1px solid #ddd; text-align: right;">TOTAL ${printTypeLabels[key].toUpperCase()}</td>
+                        <td style="padding: 12px; border: 1px solid #ddd; text-align: right;">${formatCurrency(sectionTotal)}</td>
+                    </tr>
+                </tbody>
+            </table>
+        `;
+    });
 
     const content = `
         <div style="font-family: Arial, sans-serif; padding: 40px; max-width: 800px; margin: 0 auto; border: 1px solid #eee;">
@@ -231,7 +479,7 @@ const printMovement = (item: any) => {
             <div style="margin-bottom: 30px; background: #f9f9f9; padding: 20px; border-radius: 4px;">
                 <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
                     <strong>${tiersLabel} :</strong>
-                    <span>${item.tiers}</span>
+                    <span>${item.tiers || '-'}</span>
                 </div>
                 <div style="display: flex; justify-content: space-between;">
                     <strong>Type de mouvement :</strong>
@@ -239,27 +487,19 @@ const printMovement = (item: any) => {
                 </div>
             </div>
 
+            ${sectionsHtml}
             <table style="width: 100%; border-collapse: collapse; margin-bottom: 30px;">
-                <thead>
-                    <tr style="background-color: #f2f2f2;">
-                        <th style="padding: 12px; border: 1px solid #ddd; text-align: left;">Désignation</th>
-                        <th style="padding: 12px; border: 1px solid #ddd; text-align: right;">Quantité</th>
-                        <th style="padding: 12px; border: 1px solid #ddd; text-align: right;">Prix Unitaire</th>
-                        <th style="padding: 12px; border: 1px solid #ddd; text-align: right;">Total</th>
-                    </tr>
-                </thead>
                 <tbody>
-                    ${rowsHtml}
                     <tr style="background-color: #f9f9f9; font-weight: bold;">
-                        <td colspan="3" style="padding: 12px; border: 1px solid #ddd; text-align: right;">TOTAL GÉNÉRAL</td>
-                        <td style="padding: 12px; border: 1px solid #ddd; text-align: right;">${formatCurrency(totalDocumentValue)}</td>
+                        <td style="padding: 12px; border: 1px solid #ddd; text-align: right;">TOTAL GENERAL</td>
+                        <td style="padding: 12px; border: 1px solid #ddd; text-align: right; width: 200px;">${formatCurrency(totalDocumentValue)}</td>
                     </tr>
                 </tbody>
             </table>
 
             <div style="margin-top: 50px; display: flex; justify-content: space-between;">
                 <div style="text-align: center;">
-                    <p><strong>Signature Directeur Général</strong></p>
+                    <p><strong>Signature Directeur General</strong></p>
                     <div style="height: 60px;"></div>
                 </div>
                 <div style="text-align: center;">
@@ -267,9 +507,9 @@ const printMovement = (item: any) => {
                     <div style="height: 60px;"></div>
                 </div>
             </div>
-            
+
             <div style="margin-top: 30px; font-size: 12px; color: #999; text-align: center;">
-                Imprimé le ${new Date().toLocaleString()}
+                Imprime le ${new Date().toLocaleString()}
             </div>
         </div>
     `;
@@ -282,6 +522,10 @@ const printMovement = (item: any) => {
             printWindow.print();
         }, 500);
     }
+};
+const openViewDialog = (group: any) => {
+    selectedGroup.value = group;
+    isViewDialogOpen.value = true;
 };
 
 onMounted(async () => {
@@ -298,9 +542,10 @@ onMounted(async () => {
             <UiParentCard title="Mouvements de stock">
                 <template v-slot:action>
                     <div class="d-flex gap-2 align-center">
+                        <v-btn color="success" variant="outlined" prepend-icon="mdi-file-excel" @click="exportToExcel">Exporter Excel</v-btn>
                         <v-btn-toggle v-model="filterType" mandatory density="compact" color="primary" variant="outlined">
                             <v-btn value="ALL">Tout</v-btn>
-                            <v-btn value="ENTREE">Entrées</v-btn>
+                            <v-btn value="ENTREE">EntrÃ©es</v-btn>
                             <v-btn value="SORTIE">Sorties</v-btn>
                         </v-btn-toggle>
                     </div>
@@ -317,13 +562,16 @@ onMounted(async () => {
                             {{ item.type }}
                         </v-chip>
                     </template>
-                    <template v-slot:item.prix="{ item }">
-                        {{ formatCurrency(item.prix) }}
+                    <template v-slot:item.quantite_totale="{ item }">
+                        {{ item.quantite_totale }}
                     </template>
                     <template v-slot:item.valeur_totale="{ item }">
                         {{ formatCurrency(item.valeur_totale) }}
                     </template>
                     <template v-slot:item.actions="{ item }">
+                        <v-btn icon variant="text" color="primary" size="small" title="Consulter les lignes" @click="openViewDialog(item)">
+                            <EyeIcon size="20" />
+                        </v-btn>
                         <v-btn icon variant="text" color="secondary" size="small" title="Imprimer le bon" @click="printMovement(item)">
                             <PrinterIcon size="20" />
                         </v-btn>
@@ -332,4 +580,50 @@ onMounted(async () => {
             </UiParentCard>
         </v-col>
     </v-row>
+
+    <v-dialog v-model="isViewDialogOpen" max-width="900">
+        <v-card v-if="selectedGroup">
+            <v-card-title class="d-flex justify-space-between align-center">
+                <span>DÃ©tail du lot #{{ selectedGroup.num_ordre }}</span>
+                <v-btn icon="mdi-close" variant="text" @click="isViewDialogOpen = false"></v-btn>
+            </v-card-title>
+            <v-card-text>
+                <div class="mb-3">
+                    <strong>Type:</strong> {{ selectedGroup.type }} |
+                    <strong>Date:</strong> {{ selectedGroup.date.toLocaleDateString() }} |
+                    <strong>Tiers:</strong> {{ selectedGroup.tiers }}
+                </div>
+
+                <v-table density="comfortable">
+                    <thead>
+                        <tr>
+                            <th class="text-left">Produit</th>
+                            <th class="text-right">QuantitÃ©</th>
+                            <th class="text-right">Prix Unitaire</th>
+                            <th class="text-right">Valeur Totale</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr v-for="line in selectedGroup.lines" :key="line.id">
+                            <td>{{ line.product_name }}</td>
+                            <td class="text-right">{{ line.quantite }}</td>
+                            <td class="text-right">{{ formatCurrency(line.prix) }}</td>
+                            <td class="text-right">{{ formatCurrency(line.valeur_totale) }}</td>
+                        </tr>
+                        <tr>
+                            <td class="text-right font-weight-bold" colspan="3">Total</td>
+                            <td class="text-right font-weight-bold">{{ formatCurrency(selectedGroup.valeur_totale) }}</td>
+                        </tr>
+                    </tbody>
+                </v-table>
+            </v-card-text>
+            <v-card-actions class="justify-end">
+                <v-btn color="success" variant="outlined" prepend-icon="mdi-file-excel" @click="exportGroupToExcel(selectedGroup)">Exporter Excel</v-btn>
+                <v-btn color="secondary" variant="outlined" prepend-icon="mdi-printer" @click="printMovement(selectedGroup)">Imprimer</v-btn>
+                <v-btn color="primary" @click="isViewDialogOpen = false">Fermer</v-btn>
+            </v-card-actions>
+        </v-card>
+    </v-dialog>
 </template>
+
+

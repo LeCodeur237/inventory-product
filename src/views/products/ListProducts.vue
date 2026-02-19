@@ -127,6 +127,7 @@ interface Product {
 const products = ref<Product[]>([]);
 const loading = ref(true);
 const currentUser = ref<any>(null);
+const company = ref<any>(null);
 const profils = ref<any[]>([]);
 const currentPage = ref(1);
 const itemsPerPage = ref(10);
@@ -211,12 +212,192 @@ const fetchProfils = async () => {
     }
 };
 
+const fetchCompany = async () => {
+    if (!currentUser.value?.id_entreprise) return;
+    try {
+        const response = await axiosInstance.get(`/entreprises/${currentUser.value.id_entreprise}`);
+        company.value = response.data;
+    } catch (error) {
+        console.error("Erreur chargement entreprise", error);
+    }
+};
+
+const getImageUrl = (path: string | null) => {
+    if (!path) return '';
+    if (path.startsWith('http') || path.startsWith('data:')) return path;
+    return `https://api.inventory.cremin-cam.org${path}`;
+};
+
+const escapeHtml = (value: string) => {
+    return (value || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+};
+
+const getCategoryById = (categoryId: string) => {
+    return categories.value.find((c) => c.id_categorie === categoryId) || null;
+};
+
+const getCategoryTypeByProduct = (product: Product) => {
+    return getCategoryById(product.id_categorie)?.type || 'Non défini';
+};
+
+const getTypeBucket = (typeLabel: string) => {
+    const t = (typeLabel || '').toLowerCase();
+    if (t.includes('informat')) return 'informatique';
+    if (t.includes('bancair')) return 'bancaire';
+    if (t.includes('bureau')) return 'bureau';
+    if (t.includes('entretien')) return 'entretien';
+    if (t.includes('electri') || t.includes('électri')) return 'electrique';
+    return 'autres';
+};
+
 const printPage = () => {
-    window.print();
+    if (!products.value.length) {
+        toast.warning("Aucun produit à imprimer.");
+        return;
+    }
+
+    const order = ['informatique', 'bancaire', 'bureau', 'entretien', 'electrique', 'autres'];
+    const labels: Record<string, string> = {
+        informatique: 'Informatique',
+        bancaire: 'Bancaire',
+        bureau: 'Bureau',
+        entretien: 'Entretien',
+        electrique: 'Electrique',
+        autres: 'Autres'
+    };
+
+    const grouped: Record<string, Product[]> = {
+        informatique: [],
+        bancaire: [],
+        bureau: [],
+        entretien: [],
+        electrique: [],
+        autres: []
+    };
+
+    products.value.forEach((p) => {
+        const bucket = getTypeBucket(getCategoryTypeByProduct(p));
+        grouped[bucket].push(p);
+    });
+
+    const totalGeneralValeur = products.value.reduce((sum, item) => {
+        return sum + (Number(item.prix) || 0) * (Number(item.quantite_stock) || 0);
+    }, 0);
+
+    let sectionHtml = '';
+    order.forEach((key) => {
+        const rows = grouped[key];
+        if (!rows.length) return;
+
+        const rowsHtml = rows
+            .map((item, idx) => {
+                const totalValue = (Number(item.prix) || 0) * (Number(item.quantite_stock) || 0);
+                return `
+                    <tr>
+                        <td>${idx + 1}</td>
+                        <td>${escapeHtml(item.nom || '')}</td>
+                        <td style="text-align:right;">${escapeHtml(formatCurrency(item.prix || 0))}</td>
+                        <td style="text-align:center;">${item.quantite_stock ?? 0}</td>
+                        <td style="text-align:right;">${escapeHtml(formatCurrency(totalValue))}</td>
+                    </tr>
+                `;
+            })
+            .join('');
+
+        sectionHtml += `
+            <h3 style="margin: 20px 0 10px; color: #1f2937;">Type: ${labels[key]}</h3>
+            <table style="width:100%; border-collapse:collapse; margin-bottom: 16px;">
+                <thead>
+                    <tr style="background:#f3f4f6;">
+                        <th style="border:1px solid #d1d5db; padding:8px; width:50px;">N°</th>
+                        <th style="border:1px solid #d1d5db; padding:8px; text-align:left;">Produit</th>
+                        <th style="border:1px solid #d1d5db; padding:8px; text-align:right;">Prix</th>
+                        <th style="border:1px solid #d1d5db; padding:8px; text-align:center;">Stock</th>
+                        <th style="border:1px solid #d1d5db; padding:8px; text-align:right;">Valeur totale</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${rowsHtml}
+                </tbody>
+            </table>
+        `;
+    });
+
+    const logoUrl = company.value?.logo ? getImageUrl(company.value.logo) : '';
+    const agency = currentUser.value?.agence || '-';
+    const normalizedAgency = (agency || '').toLowerCase();
+    const isDirectionGenerale = normalizedAgency.includes('direction générale') || normalizedAgency.includes('direction generale');
+    const signerTitle = isDirectionGenerale ? 'Le Directeur General' : `Chef de l'${agency}`;
+    const signerName = isDirectionGenerale ? (company.value?.manager_name || '................................') : '................................';
+    const serviceResponsable = currentUser.value?.poste || '................................';
+
+    const content = `
+        <div style="font-family: Arial, sans-serif; color:#111827; padding: 24px;">
+            <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom: 16px; border-bottom: 2px solid #e5e7eb; padding-bottom: 12px;">
+                <div>
+                    ${logoUrl ? `<img src="${logoUrl}" style="max-height:70px; max-width:180px;" />` : '<div style="font-weight:700; font-size:18px;">Inventory Pro</div>'}
+                    <div style="margin-top: 8px; font-size: 13px;"><strong>Agence:</strong> ${escapeHtml(agency)}</div>
+                </div>
+                <div style="text-align:right; font-size:12px;">
+                    <div><strong>Liste des Produits par Type</strong></div>
+                    <div>Imprimé le: ${new Date().toLocaleString()}</div>
+                </div>  
+            </div>
+
+            <div style="text-align:center; padding:10px 12px; font-size:24px; margin-bottom: 2rem; margin-top: 4rem;">
+                <strong><u>LISTE DES PRODUITS PAR TYPE</u></strong>
+            </div>
+
+            <div style="margin: 8px 0 18px; background:#eef6ff; border:1px solid #cfe3ff; padding:10px 12px; border-radius:6px; text-align:right;">
+                <strong>Total général des valeurs:</strong> ${escapeHtml(formatCurrency(totalGeneralValeur))}
+            </div>
+
+            ${sectionHtml || '<p>Aucun produit disponible.</p>'}
+
+            <div style="margin: 10px 0 18px; background:#eef6ff; border:1px solid #cfe3ff; padding:10px 12px; border-radius:6px; text-align:right;">
+                <strong>Total général des valeurs:</strong> ${escapeHtml(formatCurrency(totalGeneralValeur))}
+            </div>
+
+            <div style="display:flex; justify-content:space-between; margin-top:36px; padding-top:14px; border-top:1px solid #e5e7eb;">
+                <div style="text-align:center; width:45%;">
+                    <div style="font-size:13px; text-transform:uppercase; font-weight:600;">Service responsable</div>
+                    <div style="margin-top:8px;">${escapeHtml(serviceResponsable)}</div>
+                    <div style="margin-top:28px;">Signature: ____________________</div>
+                </div>
+                <div style="text-align:center; width:45%;">
+                    <div style="font-size:13px; text-transform:uppercase; font-weight:600;">${escapeHtml(signerTitle)}</div>
+                    <div style="margin-top:8px;">${escapeHtml(signerName)}</div>
+                    <div style="margin-top:28px;">Signature: ____________________</div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    const printWindow = window.open('', '', 'height=900,width=1200');
+    if (!printWindow) return;
+
+    printWindow.document.write(`
+        <html>
+            <head>
+                <title>Liste Produits - ${escapeHtml(agency)}</title>
+            </head>
+            <body>${content}</body>
+        </html>
+    `);
+    printWindow.document.close();
+    setTimeout(() => {
+        printWindow.print();
+    }, 400);
 };
 
 onMounted(async () => {
     await Promise.all([fetchCurrentUser(), fetchProfils(), fetchSelectOptions()]);
+    await fetchCompany();
     await fetchProducts();
 });
 
@@ -606,6 +787,77 @@ const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'XOF' }).format(value || 0);
 };
 
+const exportToExcel = () => {
+    const rows = filteredProducts.value;
+    if (!rows.length) {
+        toast.warning("Aucun produit à exporter.");
+        return;
+    }
+
+    let totalGeneral = 0;
+    const bodyRows = rows
+        .map((item, index) => {
+            const totalValue = (Number(item.prix) || 0) * (Number(item.quantite_stock) || 0);
+            totalGeneral += totalValue;
+            return `
+                <tr>
+                    <td>${index + 1}</td>
+                    <td>${escapeHtml(item.nom || '')}</td>
+                    <td>${escapeHtml(item.reference || '-')}</td>
+                    <td>${escapeHtml(getCategoryName(item.id_categorie))}</td>
+                    <td>${escapeHtml(item.agence || '-')}</td>
+                    <td style="text-align:center;">${item.quantite_stock ?? 0}</td>
+                    <td style="text-align:right;">${item.prix ?? 0}</td>
+                    <td style="text-align:right;">${totalValue}</td>
+                </tr>
+            `;
+        })
+        .join('');
+
+    const tableHtml = `
+        <html>
+            <head>
+                <meta charset="UTF-8" />
+            </head>
+            <body>
+                <table border="1" style="border-collapse:collapse;">
+                    <thead>
+                        <tr>
+                            <th>N°</th>
+                            <th>Produit</th>
+                            <th>Référence</th>
+                            <th>Catégorie</th>
+                            <th>Agence</th>
+                            <th>Stock</th>
+                            <th>Prix unitaire</th>
+                            <th>Valeur totale</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${bodyRows}
+                        <tr>
+                            <td colspan="7" style="text-align:right;"><strong>Total général</strong></td>
+                            <td style="text-align:right;"><strong>${totalGeneral}</strong></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </body>
+        </html>
+    `;
+
+    const blob = new Blob([tableHtml], { type: 'application/vnd.ms-excel;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    const agency = (currentUser.value?.agence || 'all').replace(/\s+/g, '-');
+    const date = new Date().toISOString().slice(0, 10);
+    link.href = url;
+    link.download = `produits-${agency}-${date}.xls`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+};
+
 </script>
 
 <template>
@@ -616,6 +868,7 @@ const formatCurrency = (value: number) => {
                 <template v-slot:action>
                     <div class="d-flex ga-2">
                         <v-btn color="secondary" variant="outlined" prepend-icon="mdi-printer" @click="printPage">Imprimer / PDF</v-btn>
+                        <v-btn color="success" variant="outlined" prepend-icon="mdi-file-excel" @click="exportToExcel">Exporter Excel</v-btn>
                         <v-btn color="primary" prepend-icon="mdi-plus" @click="openAddDrawer">Ajouter un produit</v-btn>
                     </div>
                 </template>
