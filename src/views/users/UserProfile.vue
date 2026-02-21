@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, onUnmounted, nextTick } from 'vue';
 import BaseBreadcrumb from '@/components/shared/BaseBreadcrumb.vue';
 import UiParentCard from '@/components/shared/UiParentCard.vue';
 import axiosInstance from '@/utils/axios';
@@ -21,6 +21,8 @@ const breadcrumbs = ref([
 ]);
 
 const loading = ref(false);
+const MAX_UPLOAD_SIZE = 2 * 1024 * 1024; // 2 Mo
+const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 const userModel = ref({
     id_users: '',
     name: '',
@@ -38,6 +40,97 @@ const userModel = ref({
 const profileImage = ref<any>(null);
 const signatureImage = ref<any>(null);
 const profils = ref<any[]>([]);
+const signatureCanvas = ref<HTMLCanvasElement | null>(null);
+const isDrawing = ref(false);
+const hasDrawnSignature = ref(false);
+const drawnSignatureDataUrl = ref<string | null>(null);
+
+const setupSignatureCanvas = () => {
+    const canvas = signatureCanvas.value;
+    if (!canvas) return;
+    const ratio = Math.max(window.devicePixelRatio || 1, 1);
+    const width = canvas.clientWidth || 500;
+    const height = canvas.clientHeight || 150;
+    canvas.width = Math.floor(width * ratio);
+    canvas.height = Math.floor(height * ratio);
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+    ctx.lineWidth = 2;
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = '#111827';
+};
+
+const getCanvasPoint = (event: PointerEvent) => {
+    const canvas = signatureCanvas.value;
+    if (!canvas) return { x: 0, y: 0 };
+    const rect = canvas.getBoundingClientRect();
+    return {
+        x: event.clientX - rect.left,
+        y: event.clientY - rect.top
+    };
+};
+
+const startDrawSignature = (event: PointerEvent) => {
+    const canvas = signatureCanvas.value;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const { x, y } = getCanvasPoint(event);
+    isDrawing.value = true;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    canvas.setPointerCapture?.(event.pointerId);
+};
+
+const drawSignature = (event: PointerEvent) => {
+    if (!isDrawing.value) return;
+    const canvas = signatureCanvas.value;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const { x, y } = getCanvasPoint(event);
+    ctx.lineTo(x, y);
+    ctx.stroke();
+    hasDrawnSignature.value = true;
+};
+
+const endDrawSignature = (event?: PointerEvent) => {
+    if (!isDrawing.value) return;
+    isDrawing.value = false;
+    if (event && signatureCanvas.value) {
+        signatureCanvas.value.releasePointerCapture?.(event.pointerId);
+    }
+    if (signatureCanvas.value && hasDrawnSignature.value) {
+        drawnSignatureDataUrl.value = signatureCanvas.value.toDataURL('image/png');
+    }
+};
+
+const clearDrawnSignature = () => {
+    const canvas = signatureCanvas.value;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    hasDrawnSignature.value = false;
+    drawnSignatureDataUrl.value = null;
+};
+
+const dataUrlToBlob = (dataUrl: string) => {
+    const parts = dataUrl.split(',');
+    const header = parts[0];
+    const base64 = parts[1];
+    const mimeMatch = header.match(/data:(.*?);base64/);
+    const mime = mimeMatch ? mimeMatch[1] : 'image/png';
+    const binary = atob(base64);
+    const array = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) {
+        array[i] = binary.charCodeAt(i);
+    }
+    return new Blob([array], { type: mime });
+};
 
 const fetchUserProfile = async () => {
     loading.value = true;
@@ -75,12 +168,31 @@ const fetchProfils = async () => {
     }
 };
 
+const normalizeSelectedFile = (value: any): File | null => {
+    const file = Array.isArray(value) ? value[0] : value;
+    return file instanceof File ? file : null;
+};
+
+const validateUploadFile = (file: File | null, label: string) => {
+    if (!file) return false;
+    if (!ALLOWED_MIME_TYPES.includes(file.type)) {
+        toast.error(`${label} : format invalide. Utilisez JPG, PNG ou WEBP.`);
+        return false;
+    }
+    if (file.size > MAX_UPLOAD_SIZE) {
+        toast.error(`${label} : fichier trop volumineux (max 2 Mo).`);
+        return false;
+    }
+    return true;
+};
+
 const saveProfile = async () => {
     loading.value = true;
     try {
         // Upload de la photo de profil si modifiée
-        const pFile = Array.isArray(profileImage.value) ? profileImage.value[0] : profileImage.value;
+        const pFile = normalizeSelectedFile(profileImage.value);
         if (pFile) {
+            if (!validateUploadFile(pFile, 'Photo de profil')) return;
             const formData = new FormData();
             formData.append('file', pFile);
             const response = await axiosInstance.post('/users/upload-media', formData, {
@@ -89,10 +201,23 @@ const saveProfile = async () => {
             userModel.value.link_img = response.data.path;
         }
         // Upload de la signature si modifiée
-        const sFile = Array.isArray(signatureImage.value) ? signatureImage.value[0] : signatureImage.value;
+        const sFile = normalizeSelectedFile(signatureImage.value);
         if (sFile) {
+            if (!validateUploadFile(sFile, 'Signature')) return;
             const formData = new FormData();
             formData.append('file', sFile);
+            const response = await axiosInstance.post('/users/upload-media', formData, {
+                headers: { 'Content-Type': 'multipart/form-data' }
+            });
+            userModel.value.signature = response.data.path;
+        } else if (drawnSignatureDataUrl.value && hasDrawnSignature.value) {
+            const blob = dataUrlToBlob(drawnSignatureDataUrl.value);
+            if (blob.size > MAX_UPLOAD_SIZE) {
+                toast.error('Signature dessinée : fichier trop volumineux (max 2 Mo).');
+                return;
+            }
+            const formData = new FormData();
+            formData.append('file', blob, `signature-${Date.now()}.png`);
             const response = await axiosInstance.post('/users/upload-media', formData, {
                 headers: { 'Content-Type': 'multipart/form-data' }
             });
@@ -108,9 +233,15 @@ const saveProfile = async () => {
         await fetchUserProfile();
         profileImage.value = null;
         signatureImage.value = null;
+        clearDrawnSignature();
         
-    } catch (error) {
-        toast.error("Erreur lors de la mise à jour du profil.");
+    } catch (error: any) {
+        const status = error?.response?.status;
+        if (status === 413) {
+            toast.error("Fichier trop volumineux pour le serveur. Réduisez la taille de l'image.");
+        } else {
+            toast.error("Erreur lors de la mise à jour du profil.");
+        }
         console.error(error);
     } finally {
         loading.value = false;
@@ -130,6 +261,14 @@ const printPage = () => {
 onMounted(() => {
     fetchUserProfile();
     fetchProfils();
+    nextTick(() => {
+        setupSignatureCanvas();
+    });
+    window.addEventListener('resize', setupSignatureCanvas);
+});
+
+onUnmounted(() => {
+    window.removeEventListener('resize', setupSignatureCanvas);
 });
 </script>
 
@@ -154,6 +293,22 @@ onMounted(() => {
                     <div class="mb-4 border border-dashed pa-4 rounded w-100 d-flex justify-center align-center bg-grey-lighten-5" style="height: 100px;">
                         <v-img v-if="userModel.signature" :src="getImageUrl(userModel.signature)" max-height="80" contain></v-img>
                         <div v-else class="text-medium-emphasis font-italic text-caption">Aucune signature</div>
+                    </div>
+
+                    <div class="w-100 mb-3">
+                        <div class="text-caption text-medium-emphasis mb-2">Signer avec la souris / le doigt</div>
+                        <canvas
+                            ref="signatureCanvas"
+                            class="signature-canvas"
+                            @pointerdown="startDrawSignature"
+                            @pointermove="drawSignature"
+                            @pointerup="endDrawSignature"
+                            @pointerleave="endDrawSignature"
+                            @pointercancel="endDrawSignature"
+                        ></canvas>
+                        <div class="d-flex justify-end mt-2">
+                            <v-btn size="small" variant="text" color="error" @click="clearDrawnSignature">Effacer la signature</v-btn>
+                        </div>
                     </div>
                     
                     <v-file-input v-model="signatureImage" label="Téléverser une signature" variant="outlined" density="compact" prepend-icon="mdi-pen" accept="image/*" class="w-100" hide-details></v-file-input>
@@ -192,3 +347,15 @@ onMounted(() => {
         </v-col>
     </v-row>
 </template>
+
+<style scoped>
+.signature-canvas {
+    width: 100%;
+    height: 150px;
+    border: 1px dashed #9ca3af;
+    border-radius: 8px;
+    background: #fff;
+    cursor: crosshair;
+    touch-action: none;
+}
+</style>

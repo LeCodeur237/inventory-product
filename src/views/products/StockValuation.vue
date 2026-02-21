@@ -15,6 +15,11 @@ const breadcrumbs = ref([
 const loading = ref(true);
 const stockData = ref<any[]>([]);
 const search = ref('');
+const selectedYear = ref(new Date().getFullYear());
+const yearOptions = computed(() => {
+    const current = new Date().getFullYear();
+    return Array.from({ length: 10 }, (_, i) => current - i);
+});
 const currentUser = ref<any>(null);
 const company = ref<any>(null);
 const profils = ref<any[]>([]);
@@ -30,6 +35,7 @@ const printTypeLabels: Record<string, string> = {
 
 const headers = [
     { title: 'Produit', key: 'nom', align: 'start' as const, sortable: true },
+    { title: 'Conditionnement', key: 'conditionnement', align: 'start' as const },
     { title: 'Qté Entrée', key: 'total_qte_entree', align: 'end' as const },
     { title: 'Valeur Entrée', key: 'total_valeur_entree', align: 'end' as const },
     { title: 'Qté Sortie', key: 'total_qte_sortie', align: 'end' as const },
@@ -71,8 +77,16 @@ const fetchData = async () => {
         }
 
         stockData.value = products.map((product: any) => {
-            const productEntries = entries.filter((e: any) => e.id_product === product.id_product);
-            const productExits = exits.filter((s: any) => s.id_product === product.id_product);
+            const productEntries = entries.filter((e: any) => {
+                if (e.id_product !== product.id_product) return false;
+                const d = new Date(e.date_reception);
+                return !isNaN(d.getTime()) && d.getFullYear() === selectedYear.value;
+            });
+            const productExits = exits.filter((s: any) => {
+                if (s.id_product !== product.id_product) return false;
+                const d = new Date(s.date_sortie);
+                return !isNaN(d.getTime()) && d.getFullYear() === selectedYear.value;
+            });
 
             const totalQteEntree = productEntries.reduce((sum: number, e: any) => sum + Number(e.quantite_entree), 0);
             const totalValeurEntree = productEntries.reduce((sum: number, e: any) => {
@@ -83,7 +97,7 @@ const fetchData = async () => {
             const pump = totalQteEntree > 0 ? totalValeurEntree / totalQteEntree : (Number(product.prix) || 0);
             const totalQteSortie = productExits.reduce((sum: number, s: any) => sum + Number(s.quantite_sortie), 0);
             const totalValeurSortie = totalQteSortie * pump;
-            const stockActuel = Number(product.quantite_stock);
+            const stockActuel = totalQteEntree - totalQteSortie;
             const valeurStock = stockActuel * pump;
             const typeProduit = categories.find((c: any) => c.id_categorie === product.id_categorie)?.type || 'Non defini';
 
@@ -91,6 +105,7 @@ const fetchData = async () => {
                 id: product.id_product,
                 nom: product.nom,
                 reference: product.reference,
+                conditionnement: product.conditionnement || '',
                 type_produit: typeProduit,
                 total_qte_entree: totalQteEntree,
                 total_valeur_entree: totalValeurEntree,
@@ -190,6 +205,7 @@ const exportToExcel = () => {
         <tr>
             <td>${index + 1}</td>
             <td>${escapeHtml(item.nom || '-')}</td>
+            <td>${escapeHtml(item.conditionnement || '-')}</td>
             <td style="text-align:right;">${item.total_qte_entree ?? 0}</td>
             <td style="text-align:right;">${item.total_valeur_entree ?? 0}</td>
             <td style="text-align:right;">${item.total_qte_sortie ?? 0}</td>
@@ -208,6 +224,7 @@ const exportToExcel = () => {
                         <tr>
                             <th>N°</th>
                             <th>Produit</th>
+                            <th>Conditionnement</th>
                             <th>Qté Entrée</th>
                             <th>Valeur Entrée</th>
                             <th>Qté Sortie</th>
@@ -219,7 +236,7 @@ const exportToExcel = () => {
                     <tbody>
                         ${bodyRows}
                         <tr>
-                            <td colspan="3" style="text-align:right;"><strong>Total Valeur Entrée</strong></td>
+                            <td colspan="4" style="text-align:right;"><strong>Total Valeur Entrée</strong></td>
                             <td style="text-align:right;"><strong>${totalValeurEntree}</strong></td>
                             <td style="text-align:right;"><strong>Total Valeur Sortie</strong></td>
                             <td style="text-align:right;"><strong>${totalValeurSortie}</strong></td>
@@ -276,6 +293,7 @@ const printPage = () => {
             <tr>
                 <td style="border:1px solid #d1d5db; padding:8px;">${index + 1}</td>
                 <td style="border:1px solid #d1d5db; padding:8px;">${escapeHtml(item.nom || '-')}</td>
+                <td style="border:1px solid #d1d5db; padding:8px;">${escapeHtml(item.conditionnement || '-')}</td>
                 <td style="border:1px solid #d1d5db; padding:8px; text-align:right;">${item.total_qte_entree ?? 0}</td>
                 <td style="border:1px solid #d1d5db; padding:8px; text-align:right;">${escapeHtml(formatCurrency(item.total_valeur_entree || 0))}</td>
                 <td style="border:1px solid #d1d5db; padding:8px; text-align:right;">${item.total_qte_sortie ?? 0}</td>
@@ -292,6 +310,7 @@ const printPage = () => {
                     <tr style="background:#f3f4f6;">
                         <th style="border:1px solid #d1d5db; padding:8px; width:50px;">N°</th>
                         <th style="border:1px solid #d1d5db; padding:8px; text-align:left;">Produit</th>
+                        <th style="border:1px solid #d1d5db; padding:8px; text-align:left;">Conditionnement</th>
                         <th style="border:1px solid #d1d5db; padding:8px; text-align:right;">Qté Entrée</th>
                         <th style="border:1px solid #d1d5db; padding:8px; text-align:right;">Valeur Entrée</th>
                         <th style="border:1px solid #d1d5db; padding:8px; text-align:right;">Qté Sortie</th>
@@ -340,7 +359,7 @@ const printPage = () => {
             <table style="width:100%; border-collapse:collapse; margin-bottom: 16px;">
                 <tfoot>
                     <tr style="background:#f9fafb; font-weight:700;">
-                        <td colspan="3" style="border:1px solid #d1d5db; padding:8px; text-align:right;">Total Valeur Entree</td>
+                        <td colspan="4" style="border:1px solid #d1d5db; padding:8px; text-align:right;">Total Valeur Entree</td>
                         <td style="border:1px solid #d1d5db; padding:8px; text-align:right;">${escapeHtml(formatCurrency(totalValeurEntree))}</td>
                         <td style="border:1px solid #d1d5db; padding:8px; text-align:right;">Total Valeur Sortie</td>
                         <td style="border:1px solid #d1d5db; padding:8px; text-align:right;">${escapeHtml(formatCurrency(totalValeurSortie))}</td>
@@ -396,6 +415,16 @@ onMounted(async () => {
             <UiParentCard title="Tableau de bord des stocks">
                 <template v-slot:action>
                     <div class="d-flex ga-2">
+                        <v-select
+                            v-model="selectedYear"
+                            :items="yearOptions"
+                            label="Année"
+                            variant="outlined"
+                            density="compact"
+                            hide-details
+                            style="max-width: 120px;"
+                            @update:model-value="fetchData"
+                        />
                         <v-btn color="success" variant="outlined" prepend-icon="mdi-file-excel" @click="exportToExcel">Exporter Excel</v-btn>
                         <v-btn color="secondary" variant="outlined" prepend-icon="mdi-printer" @click="printPage">Imprimer / PDF</v-btn>
                     </div>

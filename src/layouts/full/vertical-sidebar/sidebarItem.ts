@@ -174,6 +174,13 @@ const sidebarItem: menu[] = [
         external: false,
         roles: ['Admin', 'Direction', 'Controle']
     },
+    {
+        title: 'Etat Stock Periode',
+        icon: ReportAnalyticsIcon,
+        to: '/products/stock-state-report',
+        external: false,
+        roles: ['Admin', 'Direction', 'Controle', 'Agence']
+    },
     
     { header: 'Extra' },
     {

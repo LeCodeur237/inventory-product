@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { ref, onMounted, computed, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import BaseBreadcrumb from '@/components/shared/BaseBreadcrumb.vue';
@@ -42,6 +42,8 @@ const batchEntryModel = ref({
         nom: '',
         description: '',
         reference: '',
+        conditionnement: '',
+        id_product: null as string | null,
         quantite_stock: 1,
         id: Symbol(),
         brandSearch: '',
@@ -114,6 +116,7 @@ interface Product {
     nom: string;
     description: string;
     reference: string;
+    conditionnement?: string | null;
     quantite_stock: number;
     quantite_min_alerte: number;
     prix: number;
@@ -132,6 +135,12 @@ const profils = ref<any[]>([]);
 const currentPage = ref(1);
 const itemsPerPage = ref(10);
 const search = ref('');
+const productSelectOptions = computed(() => {
+    return products.value.map((p) => ({
+        ...p,
+        product_label: `${p.nom} (${p.reference || 'Sans référence'})`
+    }));
+});
 
 const filteredProducts = computed(() => {
     const keyword = search.value.trim().toLowerCase();
@@ -161,7 +170,7 @@ const getRowNumber = (index: number) => {
     return (currentPage.value - 1) * itemsPerPage.value + index + 1;
 };
 
-// Récupérer les produits depuis l'APIPôle
+// Récupérer les produits depuis l'APIPè´le
 const fetchProducts = async () => {
     loading.value = true;
     try {
@@ -173,7 +182,7 @@ const fetchProducts = async () => {
         const userProfile = profils.value.find(p => p.id_profil === profileId);
         const role = userProfile?.nom?.toLowerCase();
 
-        if (role && !['direction', 'contrôle', 'controle'].some(r => role.includes(r))) {
+        if (role && !['direction', 'contrè´le', 'controle'].some(r => role.includes(r))) {
             const userAgence = currentUser.value?.agence;
             const userPoleId = currentUser.value?.id_pole || currentUser.value?.pole_id || currentUser.value?.pole?.id_pole;
 
@@ -301,6 +310,7 @@ const printPage = () => {
                     <tr>
                         <td>${idx + 1}</td>
                         <td>${escapeHtml(item.nom || '')}</td>
+                        <td>${escapeHtml(item.conditionnement || '-')}</td>
                         <td style="text-align:right;">${escapeHtml(formatCurrency(item.prix || 0))}</td>
                         <td style="text-align:center;">${item.quantite_stock ?? 0}</td>
                         <td style="text-align:right;">${escapeHtml(formatCurrency(totalValue))}</td>
@@ -316,6 +326,7 @@ const printPage = () => {
                     <tr style="background:#f3f4f6;">
                         <th style="border:1px solid #d1d5db; padding:8px; width:50px;">N°</th>
                         <th style="border:1px solid #d1d5db; padding:8px; text-align:left;">Produit</th>
+                        <th style="border:1px solid #d1d5db; padding:8px; text-align:left;">Conditionnement</th>
                         <th style="border:1px solid #d1d5db; padding:8px; text-align:right;">Prix</th>
                         <th style="border:1px solid #d1d5db; padding:8px; text-align:center;">Stock</th>
                         <th style="border:1px solid #d1d5db; padding:8px; text-align:right;">Valeur totale</th>
@@ -428,6 +439,8 @@ const openAddDrawer = async () => {
             nom: '',
             description: '',
             reference: '',
+            conditionnement: '',
+            id_product: null,
             quantite_stock: 1,
             id: Symbol(),
             brandSearch: '',
@@ -463,6 +476,8 @@ const openEditDrawer = (item: Product) => {
             nom: item.nom,
             description: item.description,
             reference: item.reference,
+            conditionnement: item.conditionnement || '',
+            id_product: null,
             quantite_stock: item.quantite_stock, // Champ non modifiable en édition
             id: Symbol(),
             brandSearch: '',
@@ -482,6 +497,8 @@ const addLine = () => {
         nom: '',
         description: '',
         reference: '',
+        conditionnement: '',
+        id_product: null,
         quantite_stock: 1,
         id: Symbol(),
         brandSearch: '',
@@ -497,6 +514,21 @@ const removeLine = (index: number) => {
     if (batchEntryModel.value.lignes.length > 1) {
         batchEntryModel.value.lignes.splice(index, 1);
     }
+};
+
+const handleExistingProductSelection = (line: any) => {
+    if (!line?.id_product) return;
+    const selected = products.value.find((p) => p.id_product === line.id_product);
+    if (!selected) return;
+
+    line.nom = selected.nom;
+    line.description = selected.description || '';
+    line.reference = selected.reference || '';
+    line.conditionnement = selected.conditionnement || '';
+    line.quantite_min_alerte = selected.quantite_min_alerte || 0;
+    line.prix = selected.prix || 0;
+    line.id_categorie = selected.id_categorie || null;
+    line.id_marque = selected.id_marque || null;
 };
 
 const parseCsvLine = (line: string, delimiter: string) => {
@@ -555,6 +587,7 @@ const importProductsFromCsv = async () => {
                 const nom = getCell(cells, 'nom');
                 const description = getCell(cells, 'description');
                 const reference = getCell(cells, 'reference');
+                const conditionnement = getCell(cells, 'conditionnement');
                 const idCategorie = getCell(cells, 'id_categorie') || null;
                 const idMarqueRaw = getCell(cells, 'id_marque');
                 const idFournisseurRaw = getCell(cells, 'id_fournisseur');
@@ -566,6 +599,7 @@ const importProductsFromCsv = async () => {
                     nom,
                     description,
                     reference,
+                    conditionnement,
                     quantite_stock: Number.isFinite(quantiteStock) ? quantiteStock : 0,
                     id: Symbol(),
                     brandSearch: '',
@@ -593,6 +627,8 @@ const importProductsFromCsv = async () => {
             nom: l.nom,
             description: l.description,
             reference: l.reference,
+            conditionnement: l.conditionnement,
+            id_product: null,
             quantite_stock: l.quantite_stock,
             id: l.id,
             brandSearch: l.brandSearch,
@@ -708,6 +744,7 @@ const saveProduct = async () => {
                 nom: line.nom,
                 description: line.description,
                 reference: line.reference,
+                conditionnement: line.conditionnement,
                 quantite_min_alerte: line.quantite_min_alerte,
                 prix: line.prix,
                 agence: editedProduct.value.agence || currentUser.value?.agence || '',
@@ -722,24 +759,27 @@ const saveProduct = async () => {
             // --- Création (POST) ---
             const numOrdre = `ORD-${Date.now()}`; // Génération d'un numéro d'ordre unique pour le lot
             for (const line of batchEntryModel.value.lignes) {
+                const selectedExisting = line.id_product ? products.value.find((p) => p.id_product === line.id_product) : null;
                 const productPayload = {
-                    nom: line.nom,
-                    description: line.description,
-                    reference: line.reference,
-                    quantite_min_alerte: line.quantite_min_alerte,
-                    prix: line.prix,
-                    agence: currentUser.value?.agence || '',
-                    id_pole: currentUser.value?.id_pole || currentUser.value?.pole_id || currentUser.value?.pole?.id_pole || null,
-                    id_categorie: line.id_categorie,
-                    id_marque: line.id_marque,
+                    id_product: selectedExisting?.id_product || null,
+                    nom: selectedExisting?.nom || line.nom,
+                    description: selectedExisting?.description || line.description,
+                    reference: selectedExisting?.reference || line.reference,
+                    conditionnement: selectedExisting?.conditionnement || line.conditionnement,
+                    quantite_min_alerte: selectedExisting?.quantite_min_alerte ?? line.quantite_min_alerte,
+                    prix: selectedExisting?.prix ?? line.prix,
+                    agence: selectedExisting?.agence || currentUser.value?.agence || '',
+                    id_pole: selectedExisting?.id_pole || currentUser.value?.id_pole || currentUser.value?.pole_id || currentUser.value?.pole?.id_pole || null,
+                    id_categorie: selectedExisting?.id_categorie || line.id_categorie,
+                    id_marque: selectedExisting?.id_marque ?? line.id_marque,
                     id_fournisseur: batchEntryModel.value.id_fournisseur,
                     quantite_stock: 0 // La quantité est gérée par l'entrée en stock
                 };
                 const productResponse = await axiosInstance.post('/products', productPayload);
-                const newProductId = productResponse.data.id_product;
+                const targetProductId = productResponse.data.id_product;
 
                 // Créer l'entrée en stock initiale
-                if (line.quantite_stock > 0) {
+                if (line.quantite_stock > 0 && targetProductId) {
                     const stockEntryPayload = {
                         quantite_entree: line.quantite_stock,
                         id_fournisseur: batchEntryModel.value.id_fournisseur,
@@ -747,14 +787,14 @@ const saveProduct = async () => {
                         prix_achat: line.prix,
                         num_ordre: numOrdre
                     };
-                    await axiosInstance.post(`/products/${newProductId}/entries`, stockEntryPayload);
+                    await axiosInstance.post(`/products/${targetProductId}/entries`, stockEntryPayload);
                 }
             }
             toast.success(`${batchEntryModel.value.lignes.length} produit(s) ajouté(s) avec succès !`);
         }
 
         isDrawerOpen.value = false;
-        await fetchProducts(); // Rafraîchir la liste
+        await fetchProducts(); // Rafraè®chir la liste
 
     } catch (error: any) {
         const action = editedProduct.value ? 'modification' : 'création';
@@ -804,6 +844,7 @@ const exportToExcel = () => {
                     <td>${index + 1}</td>
                     <td>${escapeHtml(item.nom || '')}</td>
                     <td>${escapeHtml(item.reference || '-')}</td>
+                    <td>${escapeHtml(item.conditionnement || '-')}</td>
                     <td>${escapeHtml(getCategoryName(item.id_categorie))}</td>
                     <td>${escapeHtml(item.agence || '-')}</td>
                     <td style="text-align:center;">${item.quantite_stock ?? 0}</td>
@@ -826,6 +867,7 @@ const exportToExcel = () => {
                             <th>N°</th>
                             <th>Produit</th>
                             <th>Référence</th>
+                            <th>Conditionnement</th>
                             <th>Catégorie</th>
                             <th>Agence</th>
                             <th>Stock</th>
@@ -836,7 +878,7 @@ const exportToExcel = () => {
                     <tbody>
                         ${bodyRows}
                         <tr>
-                            <td colspan="7" style="text-align:right;"><strong>Total général</strong></td>
+                            <td colspan="8" style="text-align:right;"><strong>Total général</strong></td>
                             <td style="text-align:right;"><strong>${totalGeneral}</strong></td>
                         </tr>
                     </tbody>
@@ -889,6 +931,7 @@ const exportToExcel = () => {
                             <th class="text-left text-uppercase">N°</th>
                             <th class="text-left text-uppercase">Nom du produit</th>
                             <th class="text-left text-uppercase">Référence</th>
+                            <th class="text-left text-uppercase">Conditionnement</th>
                             <th class="text-left text-uppercase">Prix Unitaire</th>
                             <th class="text-left text-uppercase">Catégorie</th>
                             <th class="text-left text-uppercase">Agence</th>
@@ -901,6 +944,7 @@ const exportToExcel = () => {
                             <td>{{ getRowNumber(index) }}</td>
                             <td>{{ item.nom }}</td>
                             <td>{{ item.reference }}</td>
+                            <td>{{ item.conditionnement || '-' }}</td>
                             <td>{{ formatCurrency(item.prix) }}</td>
                             <td>{{ getCategoryName(item.id_categorie) }}</td>
                             <td>{{ item.agence || '-' }}</td>
@@ -919,7 +963,7 @@ const exportToExcel = () => {
                             </td>
                         </tr>
                         <tr v-if="paginatedProducts.length === 0">
-                            <td colspan="8" class="text-center text-medium-emphasis py-4">Aucun produit disponible.</td>
+                            <td colspan="9" class="text-center text-medium-emphasis py-4">Aucun produit disponible.</td>
                         </tr>
                     </tbody>
                 </v-table>
@@ -992,14 +1036,28 @@ const exportToExcel = () => {
                             </v-card-title>
                             <v-card-text>
                                 <v-row dense>
-                                    <v-col cols="12"><v-text-field v-model="line.nom" label="Nom du produit" variant="outlined" density="compact" :rules="[v => !!v || 'Requis']" @update:model-value="generateRef(line, $event)"></v-text-field></v-col>
-                                    <v-col cols="12" md="6"><v-text-field v-model="line.reference" label="Référence" variant="outlined" density="compact"></v-text-field></v-col>
-                                    <v-col cols="12" md="6"><v-select v-model="line.id_categorie" :items="categoryOptions" item-title="category_label" item-value="id_categorie" label="Catégorie" variant="outlined" density="compact" :rules="[v => !!v || 'Requis']"></v-select></v-col>
+                                    <v-col cols="12" v-if="!editedProduct">
+                                        <v-select
+                                            v-model="line.id_product"
+                                            :items="productSelectOptions"
+                                            item-title="product_label"
+                                            item-value="id_product"
+                                            label="Produit existant (optionnel)"
+                                            variant="outlined"
+                                            density="compact"
+                                            clearable
+                                            @update:model-value="handleExistingProductSelection(line)"
+                                        ></v-select>
+                                    </v-col>
+                                    <v-col cols="12"><v-text-field v-model="line.nom" label="Nom du produit" variant="outlined" density="compact" :rules="[v => line.id_product || !!v || 'Requis']" @update:model-value="generateRef(line, $event)" :disabled="!!line.id_product && !editedProduct"></v-text-field></v-col>
+                                    <v-col cols="12" md="6"><v-text-field v-model="line.reference" label="Référence" variant="outlined" density="compact" :disabled="!!line.id_product && !editedProduct"></v-text-field></v-col>
+                                    <v-col cols="12" md="6"><v-text-field v-model="line.conditionnement" label="Conditionnement" variant="outlined" density="compact" :disabled="!!line.id_product && !editedProduct"></v-text-field></v-col>
+                                    <v-col cols="12" md="6"><v-select v-model="line.id_categorie" :items="categoryOptions" item-title="category_label" item-value="id_categorie" label="Catégorie" variant="outlined" density="compact" :rules="[v => line.id_product || !!v || 'Requis']" :disabled="!!line.id_product && !editedProduct"></v-select></v-col>
                                     <v-col cols="12" md="4"><v-text-field v-model.number="line.prix" type="number" label="Prix Unitaire" variant="outlined" density="compact" min="0"></v-text-field></v-col>
                                     <v-col cols="12" md="4" v-if="!editedProduct"><v-text-field v-model.number="line.quantite_stock" type="number" label="Quantité initiale" variant="outlined" density="compact" min="0"></v-text-field></v-col>
-                                    <v-col cols="12" md="4"><v-text-field v-model.number="line.quantite_min_alerte" type="number" label="Seuil d'alerte" variant="outlined" density="compact" min="0"></v-text-field></v-col>
+                                    <v-col cols="12" md="4"><v-text-field v-model.number="line.quantite_min_alerte" type="number" label="Seuil d'alerte" variant="outlined" density="compact" min="0" :disabled="!!line.id_product && !editedProduct"></v-text-field></v-col>
                                     <v-col cols="12" md="6">
-                                        <v-autocomplete v-model="line.id_marque" v-model:search="line.brandSearch" :items="brands" item-title="nom" item-value="id_marque" variant="outlined" density="compact" label="Marque (optionnel)">
+                                        <v-autocomplete v-model="line.id_marque" v-model:search="line.brandSearch" :items="brands" item-title="nom" item-value="id_marque" variant="outlined" density="compact" label="Marque (optionnel)" :disabled="!!line.id_product && !editedProduct">
                                             <template v-slot:no-data>
                                                 <v-list-item>
                                                     <v-list-item-title>
@@ -1012,7 +1070,7 @@ const exportToExcel = () => {
                                             </template>
                                         </v-autocomplete>
                                     </v-col>
-                                    <v-col cols="12"><v-textarea v-model="line.description" label="Description (optionnel)" variant="outlined" density="compact" rows="2"></v-textarea></v-col>
+                                    <v-col cols="12"><v-textarea v-model="line.description" label="Description (optionnel)" variant="outlined" density="compact" rows="2" :disabled="!!line.id_product && !editedProduct"></v-textarea></v-col>
                                 </v-row>
                             </v-card-text>
                         </v-card>
@@ -1068,7 +1126,7 @@ const exportToExcel = () => {
             <v-card>
                 <v-card-title class="text-h5">Confirmer la suppression</v-card-title>
                 <v-card-text>
-                    Êtes-vous sûr de vouloir supprimer le produit "<strong>{{ productToDelete?.nom }}</strong>" ? Cette action est irréversible.
+                    èŠtes-vous sè»r de vouloir supprimer le produit "<strong>{{ productToDelete?.nom }}</strong>" ? Cette action est irréversible.
                 </v-card-text>
                 <v-card-actions>
                     <v-spacer></v-spacer>
@@ -1092,6 +1150,9 @@ const exportToExcel = () => {
                         </v-col>
                         <v-col cols="12" md="6">
                             <strong>Référence:</strong> {{ previewProduct.reference }}
+                        </v-col>
+                        <v-col cols="12" md="6">
+                            <strong>Conditionnement:</strong> {{ previewProduct.conditionnement || '-' }}
                         </v-col>
                         <v-col cols="12" md="6">
                             <strong>Prix:</strong> {{ formatCurrency(previewProduct.prix) }}
@@ -1119,3 +1180,4 @@ const exportToExcel = () => {
 
     </v-row>
 </template>
+

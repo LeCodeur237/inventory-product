@@ -24,6 +24,11 @@ const toast = useToast();
 const loading = ref(false);
 
 const tab = ref('my_requests');
+const selectedYear = ref(new Date().getFullYear());
+const yearOptions = computed(() => {
+    const current = new Date().getFullYear();
+    return Array.from({ length: 10 }, (_, i) => current - i);
+});
 const currentUser = ref<any>(null);
 const isAdmin = ref(false);
 const company = ref<any>(null);
@@ -185,15 +190,18 @@ const fetchCompany = async () => {
 };
 
 const filteredRequests = computed(() => {
+    let base: Demande[] = [];
     if (tab.value === 'all_requests' && isAdmin.value) {
-        // L'API doit idéalement renvoyer les demandes filtrées par agence pour l'admin
-        return requests.value;
+        base = requests.value;
+    } else if (currentUser.value) {
+        // Par défaut : Mes demandes
+        base = requests.value.filter(r => r.id_users === currentUser.value?.id_users);
     }
-    // Par défaut : Mes demandes
-    if (currentUser.value) {
-        return requests.value.filter(r => r.id_users === currentUser.value?.id_users);
-    }
-    return [];
+
+    return base.filter((r) => {
+        const d = new Date(r.date_demande);
+        return !isNaN(d.getTime()) && d.getFullYear() === selectedYear.value;
+    });
 });
 
 const openRequestDrawer = () => {
@@ -220,6 +228,11 @@ const removeLine = (index: number) => {
 const getProductName = (id: string) => {
     const p = products.value.find(x => x.id_product === id);
     return p ? p.nom : 'Produit inconnu';
+};
+
+const getProductConditionnement = (id: string) => {
+    const p = products.value.find(x => x.id_product === id);
+    return p?.conditionnement || '-';
 };
 
 const getProductStock = (id: string) => {
@@ -287,6 +300,7 @@ const openExitConfirmDialog = (exit: any) => {
     exitToConfirm.value = {
         id_sortie_stock: exit.id_sortie_stock,
         product_name: exit.product ? exit.product.nom : getProductName(exit.id_product),
+        conditionnement: exit.product?.conditionnement || getProductConditionnement(exit.id_product),
         quantite_sortie: exit.quantite_sortie,
         quantite_reelle: exit.quantite_sortie
     };
@@ -341,6 +355,7 @@ const openApproveDialog = async (item: Demande) => {
         approvalLines.value = fullRequest.lignes.map((line: any) => ({
             id_product: line.id_product,
             product_name: line.product ? line.product.nom : getProductName(line.id_product),
+            conditionnement: line.product?.conditionnement || getProductConditionnement(line.id_product),
             quantite_demandee: line.quantite_demandee,
             quantite_accordee: line.quantite_demandee
         }));
@@ -415,10 +430,12 @@ const printRequest = () => {
     if (viewRequest.value.lignes && viewRequest.value.lignes.length > 0) {
         viewRequest.value.lignes.forEach((line: any, index: number) => {
              const pName = line.product ? line.product.nom : getProductName(line.id_product);
+             const pConditionnement = line.product?.conditionnement || getProductConditionnement(line.id_product);
              linesHtml += `
                 <tr>
                     <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">${index + 1}</td>
                     <td style="padding: 8px; border: 1px solid #ddd;">${pName}</td>
+                    <td style="padding: 8px; border: 1px solid #ddd;">${pConditionnement}</td>
                     <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">${line.quantite_demandee}</td>
                 </tr>
              `;
@@ -455,6 +472,7 @@ const printRequest = () => {
                     <tr style="background-color: #f2f2f2;">
                         <th style="padding: 10px; border: 1px solid #ddd; text-align: center; width: 50px;">#</th>
                         <th style="padding: 10px; border: 1px solid #ddd; text-align: left;">Désignation</th>
+                        <th style="padding: 10px; border: 1px solid #ddd; text-align: left;">Conditionnement</th>
                         <th style="padding: 10px; border: 1px solid #ddd; text-align: center; width: 100px;">Quantité</th>
                     </tr>
                 </thead>
@@ -497,6 +515,17 @@ onMounted(async () => {
                     <v-tab value="my_requests">Mes demandes</v-tab>
                     <v-tab value="all_requests" v-if="isAdmin">Toutes les demandes</v-tab>
                 </v-tabs>
+                <div class="d-flex justify-end mb-3">
+                    <v-select
+                        v-model="selectedYear"
+                        :items="yearOptions"
+                        label="Année"
+                        variant="outlined"
+                        density="compact"
+                        hide-details
+                        style="max-width: 140px;"
+                    />
+                </div>
 
                 <v-table class="mt-5" :loading="loading">
                     <thead>
@@ -612,12 +641,14 @@ onMounted(async () => {
                         <thead>
                             <tr>
                                 <th>Produit</th>
+                                <th>Conditionnement</th>
                                 <th class="text-center">Quantité</th>
                             </tr>
                         </thead>
                         <tbody>
                             <tr v-for="(line, idx) in viewRequest.lignes" :key="idx">
                                 <td>{{ line.product ? line.product.nom : getProductName(line.id_product) }}</td>
+                                <td>{{ line.product?.conditionnement || getProductConditionnement(line.id_product) }}</td>
                                 <td class="text-center">{{ line.quantite_demandee }}</td>
                             </tr>
                         </tbody>
@@ -630,6 +661,7 @@ onMounted(async () => {
                             <thead>
                                 <tr>
                                     <th>Produit</th>
+                                    <th>Conditionnement</th>
                                     <th class="text-center">Quantité</th>
                                     <th class="text-center">Statut</th>
                                     <th class="text-right">Actions</th>
@@ -638,6 +670,7 @@ onMounted(async () => {
                             <tbody>
                                 <tr v-for="exit in requestExits" :key="exit.id_sortie_stock">
                                     <td>{{ exit.product ? exit.product.nom : getProductName(exit.id_product) }}</td>
+                                    <td>{{ exit.product?.conditionnement || getProductConditionnement(exit.id_product) }}</td>
                                     <td class="text-center">{{ exit.quantite_sortie }}</td>
                                     <td class="text-center">
                                         <v-chip size="x-small" :color="getExitStatusColor(exit.statut_direction || exit.statut)" label>{{ exit.statut_direction || exit.statut || 'En attente' }}</v-chip>
@@ -679,6 +712,7 @@ onMounted(async () => {
                         <thead>
                             <tr>
                                 <th>Produit</th>
+                                <th>Conditionnement</th>
                                 <th class="text-center">Qté Demandée</th>
                                 <th class="text-center" style="width: 150px;">Qté Accordée</th>
                             </tr>
@@ -686,6 +720,7 @@ onMounted(async () => {
                         <tbody>
                             <tr v-for="line in approvalLines" :key="line.id_product">
                                 <td>{{ line.product_name }}</td>
+                                <td>{{ line.conditionnement || '-' }}</td>
                                 <td class="text-center">{{ line.quantite_demandee }}</td>
                                 <td>
                                     <v-text-field v-model.number="line.quantite_accordee" type="number" density="compact" variant="outlined" hide-details min="0" :max="line.quantite_demandee"></v-text-field>
@@ -723,6 +758,7 @@ onMounted(async () => {
                 <v-card-text>
                     <div class="mb-4">
                         <strong>Produit :</strong> {{ exitToConfirm.product_name }}<br>
+                        <strong>Conditionnement :</strong> {{ exitToConfirm.conditionnement || '-' }}<br>
                         <strong>Quantité prévue :</strong> {{ exitToConfirm.quantite_sortie }}
                     </div>
                     <v-label class="font-weight-bold mb-1">Quantité réelle à sortir</v-label>

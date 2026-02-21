@@ -72,6 +72,11 @@ const MainRoutes = {
             component: () => import('@/views/products/StockValuation.vue')
         },
         {
+            name: 'StockStateReport',
+            path: '/products/stock-state-report',
+            component: () => import('@/views/products/StockStateReport.vue')
+        },
+        {
             name: 'SettingsPoles',
             path: '/settings/poles',
             component: () => import('@/views/settings/ListPoles.vue')

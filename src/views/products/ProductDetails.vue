@@ -146,6 +146,10 @@ onMounted(() => {
                                     <td>{{ product.reference }}</td>
                                 </tr>
                                 <tr>
+                                    <td class="font-weight-bold">Conditionnement</td>
+                                    <td>{{ product.conditionnement || '-' }}</td>
+                                </tr>
+                                <tr>
                                     <td class="font-weight-bold">Description</td>
                                     <td>{{ product.description || '-' }}</td>
                                 </tr>

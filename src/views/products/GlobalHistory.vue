@@ -7,7 +7,7 @@ import { useToast } from 'vue-toastification';
 import { PrinterIcon, EyeIcon } from 'vue-tabler-icons';
 
 const toast = useToast();
-const page = ref({ title: 'Historique Global des OpÃ©rations' });
+const page = ref({ title: 'Historique Global des Opérations' });
 const breadcrumbs = ref([
     { title: 'Rapports', disabled: false, href: '#' },
     { title: 'Historique Global', disabled: true, href: '#' }
@@ -17,6 +17,11 @@ const loading = ref(true);
 const movements = ref<any[]>([]);
 const search = ref('');
 const filterType = ref('ALL'); // ALL, ENTREE, SORTIE
+const selectedYear = ref(new Date().getFullYear());
+const yearOptions = computed(() => {
+    const current = new Date().getFullYear();
+    return Array.from({ length: 10 }, (_, i) => current - i);
+});
 const currentUser = ref<any>(null);
 const company = ref<any>(null);
 const profils = ref<any[]>([]);
@@ -34,10 +39,10 @@ const printTypeLabels: Record<string, string> = {
 
 const headers = [
     { title: 'Date', key: 'date', align: 'start' as const },
-    { title: 'NÂ° Ordre', key: 'num_ordre', align: 'start' as const },
+    { title: 'N° Ordre', key: 'num_ordre', align: 'start' as const },
     { title: 'Type', key: 'type', align: 'center' as const },
     { title: 'Nb Lignes', key: 'nb_lignes', align: 'end' as const },
-    { title: 'QuantitÃ© Totale', key: 'quantite_totale', align: 'end' as const },
+    { title: 'Quantité Totale', key: 'quantite_totale', align: 'end' as const },
     { title: 'Valeur Totale', key: 'valeur_totale', align: 'end' as const },
     { title: 'Tiers / Observation', key: 'tiers', align: 'start' as const },
     { title: 'Actions', key: 'actions', align: 'end' as const, sortable: false },
@@ -46,8 +51,8 @@ const headers = [
 const fetchData = async () => {
     loading.value = true;
     try {
-        // On rÃ©cupÃ¨re les entrÃ©es et les sorties en parallÃ¨le
-        // Note: On suppose ici que ces endpoints existent et retournent toutes les donnÃ©es
+        // On récupère les entrées et les sorties en parallèle
+        // Note: On suppose ici que ces endpoints existent et retournent toutes les données
         const [entriesRes, exitsRes, productsRes, usersRes, suppliersRes, categoriesRes] = await Promise.all([
             axiosInstance.get('/stock/entries'),
             axiosInstance.get('/stock/exits'),
@@ -93,6 +98,10 @@ const fetchData = async () => {
             const p = products.find((x: any) => x.id_product === id);
             return p ? Number(p.prix) : 0;
         };
+        const getProductConditionnement = (id: string) => {
+            const p = products.find((x: any) => x.id_product === id);
+            return p?.conditionnement || '';
+        };
         const getUserName = (id: string) => {
             const u = users.find((x: any) => x.id_users === id);
             return u ? u.name : 'Utilisateur inconnu';
@@ -108,7 +117,7 @@ const fetchData = async () => {
             return c?.type || 'Non defini';
         };
 
-        // Normalisation des entrÃ©es
+        // Normalisation des entrées
         const entriesData = isRestricted ? entriesRes.data.filter((e: any) => allowedProductIds.has(e.id_product)) : entriesRes.data;
         const entries = entriesData.map((e: any) => {
             const prixUnitaire = Number(e.prix_achat) || getProductPrice(e.id_product) || 0;
@@ -117,6 +126,7 @@ const fetchData = async () => {
                 num_ordre: e.num_ordre || '-',
                 date: new Date(e.date_reception),
                 product_name: e.product ? e.product.nom : getProductName(e.id_product),
+                conditionnement: getProductConditionnement(e.id_product),
                 type: 'ENTREE',
                 product_type: getProductCategoryType(e.id_product),
                 quantite: e.quantite_entree,
@@ -135,6 +145,7 @@ const fetchData = async () => {
                 num_ordre: s.num_ordre || '-',
                 date: new Date(s.date_sortie),
                 product_name: s.product ? s.product.nom : getProductName(s.id_product),
+                conditionnement: getProductConditionnement(s.id_product),
                 type: 'SORTIE',
                 product_type: getProductCategoryType(s.id_product),
                 quantite: s.quantite_sortie,
@@ -144,7 +155,7 @@ const fetchData = async () => {
             };
         });
 
-        // Fusion et tri par date dÃ©croissante
+        // Fusion et tri par date décroissante
         movements.value = [...entries, ...exits].sort((a, b) => b.date.getTime() - a.date.getTime());
 
     } catch (error) {
@@ -231,6 +242,7 @@ const filteredMovements = computed(() => {
     if (filterType.value !== 'ALL') {
         data = data.filter((m: any) => m.type === filterType.value);
     }
+    data = data.filter((m: any) => new Date(m.date).getFullYear() === selectedYear.value);
 
     if (search.value) {
         const s = search.value.toLowerCase();
@@ -270,7 +282,7 @@ const escapeHtml = (value: string) => {
 const exportToExcel = () => {
     const rows = filteredMovements.value;
     if (!rows.length) {
-        toast.warning("Aucune donnÃ©e Ã  exporter.");
+        toast.warning("Aucune donnée Ã  exporter.");
         return;
     }
 
@@ -303,7 +315,7 @@ const exportToExcel = () => {
                             <th>NÂ° Ordre</th>
                             <th>Type</th>
                             <th>Nb lignes</th>
-                            <th>QuantitÃ© totale</th>
+                            <th>Quantité totale</th>
                             <th>Valeur totale</th>
                             <th>Tiers / Observation</th>
                         </tr>
@@ -311,7 +323,7 @@ const exportToExcel = () => {
                     <tbody>
                         ${bodyRows}
                         <tr>
-                            <td colspan="6" style="text-align:right;"><strong>Total gÃ©nÃ©ral</strong></td>
+                            <td colspan="6" style="text-align:right;"><strong>Total général</strong></td>
                             <td style="text-align:right;"><strong>${totalGeneral}</strong></td>
                             <td></td>
                         </tr>
@@ -351,6 +363,7 @@ const exportGroupToExcel = (group: any) => {
                 <td>${escapeHtml(new Date(line.date).toLocaleDateString())}</td>
                 <td>${escapeHtml(group.num_ordre || '-')}</td>
                 <td>${escapeHtml(line.product_name || '-')}</td>
+                <td>${escapeHtml(line.conditionnement || '-')}</td>
                 <td style="text-align:right;">${line.quantite ?? 0}</td>
                 <td style="text-align:right;">${line.prix ?? 0}</td>
                 <td style="text-align:right;">${value}</td>
@@ -370,7 +383,8 @@ const exportGroupToExcel = (group: any) => {
                             <th>Date</th>
                             <th>NÂ° Ordre</th>
                             <th>Produit</th>
-                            <th>QuantitÃ©</th>
+                            <th>Conditionnement</th>
+                            <th>Quantité</th>
                             <th>Prix unitaire</th>
                             <th>Valeur totale</th>
                             <th>Tiers / Observation</th>
@@ -379,7 +393,7 @@ const exportGroupToExcel = (group: any) => {
                     <tbody>
                         ${bodyRows}
                         <tr>
-                            <td colspan="6" style="text-align:right;"><strong>Total gÃ©nÃ©ral</strong></td>
+                            <td colspan="7" style="text-align:right;"><strong>Total général</strong></td>
                             <td style="text-align:right;"><strong>${totalGeneral}</strong></td>
                             <td></td>
                         </tr>
@@ -434,6 +448,7 @@ const printMovement = (item: any) => {
         const rowsHtml = rows.map((line: any) => `
             <tr>
                 <td style="padding: 12px; border: 1px solid #ddd;">${line.product_name}</td>
+                <td style="padding: 12px; border: 1px solid #ddd;">${line.conditionnement || '-'}</td>
                 <td style="padding: 12px; border: 1px solid #ddd; text-align: right;">${line.quantite}</td>
                 <td style="padding: 12px; border: 1px solid #ddd; text-align: right;">${formatCurrency(line.prix)}</td>
                 <td style="padding: 12px; border: 1px solid #ddd; text-align: right;">${formatCurrency(line.valeur_totale)}</td>
@@ -447,6 +462,7 @@ const printMovement = (item: any) => {
                 <thead>
                     <tr style="background-color: #f2f2f2;">
                         <th style="padding: 12px; border: 1px solid #ddd; text-align: left;">Designation</th>
+                        <th style="padding: 12px; border: 1px solid #ddd; text-align: left;">Conditionnement</th>
                         <th style="padding: 12px; border: 1px solid #ddd; text-align: right;">Quantite</th>
                         <th style="padding: 12px; border: 1px solid #ddd; text-align: right;">Prix Unitaire</th>
                         <th style="padding: 12px; border: 1px solid #ddd; text-align: right;">Total</th>
@@ -455,7 +471,7 @@ const printMovement = (item: any) => {
                 <tbody>
                     ${rowsHtml}
                     <tr style="background-color: #f9f9f9; font-weight: bold;">
-                        <td colspan="3" style="padding: 12px; border: 1px solid #ddd; text-align: right;">TOTAL ${printTypeLabels[key].toUpperCase()}</td>
+                        <td colspan="4" style="padding: 12px; border: 1px solid #ddd; text-align: right;">TOTAL ${printTypeLabels[key].toUpperCase()}</td>
                         <td style="padding: 12px; border: 1px solid #ddd; text-align: right;">${formatCurrency(sectionTotal)}</td>
                     </tr>
                 </tbody>
@@ -543,9 +559,18 @@ onMounted(async () => {
                 <template v-slot:action>
                     <div class="d-flex gap-2 align-center">
                         <v-btn color="success" variant="outlined" prepend-icon="mdi-file-excel" @click="exportToExcel">Exporter Excel</v-btn>
+                        <v-select
+                            v-model="selectedYear"
+                            :items="yearOptions"
+                            label="Année"
+                            variant="outlined"
+                            density="compact"
+                            hide-details
+                            style="max-width: 120px;"
+                        />
                         <v-btn-toggle v-model="filterType" mandatory density="compact" color="primary" variant="outlined">
                             <v-btn value="ALL">Tout</v-btn>
-                            <v-btn value="ENTREE">EntrÃ©es</v-btn>
+                            <v-btn value="ENTREE">Entrées</v-btn>
                             <v-btn value="SORTIE">Sorties</v-btn>
                         </v-btn-toggle>
                     </div>
@@ -584,7 +609,7 @@ onMounted(async () => {
     <v-dialog v-model="isViewDialogOpen" max-width="900">
         <v-card v-if="selectedGroup">
             <v-card-title class="d-flex justify-space-between align-center">
-                <span>DÃ©tail du lot #{{ selectedGroup.num_ordre }}</span>
+                <span>Détail du lot #{{ selectedGroup.num_ordre }}</span>
                 <v-btn icon="mdi-close" variant="text" @click="isViewDialogOpen = false"></v-btn>
             </v-card-title>
             <v-card-text>
@@ -598,7 +623,8 @@ onMounted(async () => {
                     <thead>
                         <tr>
                             <th class="text-left">Produit</th>
-                            <th class="text-right">QuantitÃ©</th>
+                            <th class="text-left">Conditionnement</th>
+                            <th class="text-right">Quantité</th>
                             <th class="text-right">Prix Unitaire</th>
                             <th class="text-right">Valeur Totale</th>
                         </tr>
@@ -606,12 +632,13 @@ onMounted(async () => {
                     <tbody>
                         <tr v-for="line in selectedGroup.lines" :key="line.id">
                             <td>{{ line.product_name }}</td>
+                            <td>{{ line.conditionnement || '-' }}</td>
                             <td class="text-right">{{ line.quantite }}</td>
                             <td class="text-right">{{ formatCurrency(line.prix) }}</td>
                             <td class="text-right">{{ formatCurrency(line.valeur_totale) }}</td>
                         </tr>
                         <tr>
-                            <td class="text-right font-weight-bold" colspan="3">Total</td>
+                            <td class="text-right font-weight-bold" colspan="4">Total</td>
                             <td class="text-right font-weight-bold">{{ formatCurrency(selectedGroup.valeur_totale) }}</td>
                         </tr>
                     </tbody>
@@ -625,5 +652,3 @@ onMounted(async () => {
         </v-card>
     </v-dialog>
 </template>
-
-
