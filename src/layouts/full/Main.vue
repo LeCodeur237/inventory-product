@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref, shallowRef, watch, computed } from 'vue'; // Ajout de 'computed'
+import { onMounted, onUnmounted, ref, shallowRef, watch, computed } from 'vue'; // Ajout de 'computed'
 import { useDisplay, useTheme } from "vuetify"; // Ajout de 'useTheme'
 import sidebarItems, { filterSidebarItems } from './vertical-sidebar/sidebarItem';
 import NavGroup from './vertical-sidebar/NavGroup/index.vue';
@@ -20,12 +20,19 @@ import NavCollapse from './vertical-sidebar/NavCollapse/NavCollapse.vue';
 import axiosInstance from '@/utils/axios';
 
 const sidebarMenu = shallowRef(sidebarItems);
+const THEME_KEY = 'appTheme';
+const LIGHT_THEME_NAME = 'BlueTheme';
 
 const { mdAndDown } = useDisplay(); // Destructuration pour mdAndDown
 const sDrawer = ref(true);
 
 onMounted(async () => {
     sDrawer.value = !mdAndDown.value; // hide on mobile, show on desktop
+    const savedTheme = localStorage.getItem(THEME_KEY);
+    if (savedTheme) {
+        theme.global.name.value = savedTheme;
+    }
+    window.addEventListener('app-theme-changed', syncThemeFromStorage);
 
     try {
         // Récupération de l'utilisateur et de son rôle
@@ -50,6 +57,11 @@ onMounted(async () => {
         // En cas d'erreur, on garde le menu par défaut (sidebarItems)
     }
 });
+
+onUnmounted(() => {
+    window.removeEventListener('app-theme-changed', syncThemeFromStorage);
+});
+
 watch(mdAndDown, (val) => {
     sDrawer.value = !val;
 });
@@ -58,8 +70,18 @@ watch(mdAndDown, (val) => {
 const theme = useTheme();
 const isDarkTheme = computed(() => theme.global.name.value === 'dark');
 
+const syncThemeFromStorage = () => {
+    const savedTheme = localStorage.getItem(THEME_KEY);
+    if (savedTheme) {
+        theme.global.name.value = savedTheme;
+    }
+};
+
 const toggleTheme = () => {
-    theme.global.name.value = isDarkTheme.value ? 'light' : 'dark';
+    const nextTheme = isDarkTheme.value ? LIGHT_THEME_NAME : 'dark';
+    theme.global.name.value = nextTheme;
+    localStorage.setItem(THEME_KEY, nextTheme);
+    window.dispatchEvent(new Event('app-theme-changed'));
 };
 
 </script>
